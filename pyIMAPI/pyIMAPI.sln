@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.25123.0
+VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pyIMAPI2FSutil", "pyIMAPI.vcxproj", "{0F9BB5A4-3FFA-430A-9098-7465B59F6163}"
 EndProject
@@ -9,6 +9,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pyIMAPI2FS", "..\pyIMAPI2FS
 	ProjectSection(ProjectDependencies) = postProject
 		{0F9BB5A4-3FFA-430A-9098-7465B59F6163} = {0F9BB5A4-3FFA-430A-9098-7465B59F6163}
 	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Standalone", "Standalone\Standalone.vcxproj", "{A4EEA049-85B5-4DC4-BC94-318D868FE3B2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -34,6 +36,14 @@ Global
 		{1E58FD7B-4ACE-41A8-B744-A3FBB1CE3DAE}.Release|x64.Build.0 = Release|x64
 		{1E58FD7B-4ACE-41A8-B744-A3FBB1CE3DAE}.Release|x86.ActiveCfg = Release|Win32
 		{1E58FD7B-4ACE-41A8-B744-A3FBB1CE3DAE}.Release|x86.Build.0 = Release|Win32
+		{A4EEA049-85B5-4DC4-BC94-318D868FE3B2}.Debug|x64.ActiveCfg = Debug|x64
+		{A4EEA049-85B5-4DC4-BC94-318D868FE3B2}.Debug|x64.Build.0 = Debug|x64
+		{A4EEA049-85B5-4DC4-BC94-318D868FE3B2}.Debug|x86.ActiveCfg = Debug|Win32
+		{A4EEA049-85B5-4DC4-BC94-318D868FE3B2}.Debug|x86.Build.0 = Debug|Win32
+		{A4EEA049-85B5-4DC4-BC94-318D868FE3B2}.Release|x64.ActiveCfg = Release|x64
+		{A4EEA049-85B5-4DC4-BC94-318D868FE3B2}.Release|x64.Build.0 = Release|x64
+		{A4EEA049-85B5-4DC4-BC94-318D868FE3B2}.Release|x86.ActiveCfg = Release|Win32
+		{A4EEA049-85B5-4DC4-BC94-318D868FE3B2}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -67,6 +67,7 @@ if sys.version_info[0] < 3 and sys.version_info[1] < 7:
 
 #name is the name of the package to pip and distutils
 setup(name=module_name,
+      data_files=[('.', ['pyIMAPI2FSutil.dll'])],
       version="0.1",
       author="Kenneth Long",
       author_email="klong15@mail.greenriver.edu",
@@ -83,5 +84,8 @@ setup(name=module_name,
           'Programming Language :: C',
           'Programming Language :: Python',
           'Topic :: Software Development :: Libraries :: Python Modules',
+          'Development Status :: 2 - Pre-Alpha',
+          'Environment :: Win32 (MS Windows)',
       ],
+      #exclude_package_data = {'':['*.opendb']},
       **kwargs)
