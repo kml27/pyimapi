@@ -39,6 +39,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	char **list = flist(obj);
 	ffreelist(obj, list);
 	fremove(obj, "test");
+	e = fexists(obj, "test");
 	list = flist(obj);
 	ffreelist(obj, list);
 	fcloseImage(obj);

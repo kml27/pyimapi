@@ -353,5 +353,9 @@ void CpyIMAPIObject::freelist(char **list)
 }
 void CpyIMAPIObject::remove(char *filename)
 {
+	BSTR bfilename = _com_util::ConvertStringToBSTR(filename);
 
+	current_directory->Remove(bfilename);
+
+	SysFreeString(bfilename);
 }
