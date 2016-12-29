@@ -60,14 +60,16 @@ elif "windows" in platform_string:
                         #extra_compile_args=[],
                         #extra_link_args=[])]#libcmt warning for command line built lib linked here? already tried nodefaultlib....
                     ]
-requirements = ["pywin32",]
+ext_modules = []
+requirements = []
 
 if sys.version_info[0] < 3 and sys.version_info[1] < 7:
 	requirements.append('importlib')
 
 #name is the name of the package to pip and distutils
 setup(name=module_name,
-      data_files=[('.', ['pyIMAPI2FSutil.dll'])],
+      #data_files=[('.', ['pyIMAPI2FSutil.dll'])],
+      packages=["pyIMAPI2FS"],
       version="0.1",
       author="Kenneth Long",
       author_email="klong15@mail.greenriver.edu",
@@ -75,8 +77,7 @@ setup(name=module_name,
       url="http://bitbucket.org/ken_long/pyIMAPI2FS/",
       description="A python module to provide a tarfile like object for creating ISO 9660 files using IMAPI2 FileSystem on Windows",
       license="MIT License",#"Creative Commons v3",
-      test_suite='tests.test_all',
-      install_requires=requirements,
+      dependency_links=["http://downloads.sourceforge.net/project/pywin32/pywin32/Build%20220/pywin32-220.zip?r=https%3A%2F%2Fsourceforge.net%2Fprojects%2Fpywin32%2Ffiles%2Fpywin32%2FBuild%2520220%2F&ts=1482970410&use_mirror=superb-sea2"],
       ext_modules=ext_modules,
       classifiers=[
           'Intended Audience :: Developers',
