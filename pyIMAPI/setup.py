@@ -13,7 +13,7 @@ here = os.path.dirname(__file__)
 print("the distribution has been copied for build and install to ", here)
 #print("current working directory is ", os.getcwd())
 
-ext_files = ["pyIMAPI2FS_Module.c"
+ext_files = [#"pyIMAPI2FS_Module.c"
 			]
 
 kwargs = {}
