@@ -13,7 +13,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 		//Work on COM thread detection and errors, support Multiprocessing not GIL
 		CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 
-		printf("initialized com");
+		//printf("initialized com");
 
 	case DLL_THREAD_ATTACH:
 		break;
@@ -21,7 +21,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 	case DLL_PROCESS_DETACH:
 
 		CoUninitialize();
-		printf("uninit com");
+		//printf("uninit com");
 	case DLL_THREAD_DETACH:
 		break;
 	}

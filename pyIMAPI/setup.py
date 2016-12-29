@@ -25,7 +25,7 @@ print("command line options to setup.py include ", sys.argv)
 #    kwargs['cmdclass'] = {'build_ext': build_ext}
 
 print("info: Building from C")
-
+arch = ""
 if "linux" in platform_string:
    
     print platform_string
@@ -35,7 +35,10 @@ if "linux" in platform_string:
                         libraries=[])]
 
 elif "windows" in platform_string:
-
+    if "amd64" in platform_string:
+        arch="x64\\debug\\"
+    else:
+        arch="win32\\debug\\"
     temp_directory = "c:\\temp"
 
 #check for <drive>:\temp dir
@@ -51,7 +54,7 @@ elif "windows" in platform_string:
     ext_modules =   [
                         Extension(module_name,
                         ext_files,#,
-                        libraries=["pyIMAPI2FSutil"],
+                        libraries=[arch+"pyIMAPI2FSutil"],
                         extra_compile_args=["/Zi"],#,"/LDd"],#if /LDd is specified, my setuptools and pip have the dll link occur to python27_d.lib
                         extra_link_args=["/DEBUG", "/PDB:c:\\temp\\"+module_name+".pdb"]),#libcmt warning for command line built lib linked here? already tried nodefaultlib....
                         #Extension("py_ex1",
@@ -67,7 +70,7 @@ if sys.version_info[0] < 3 and sys.version_info[1] < 7:
 
 #name is the name of the package to pip and distutils
 setup(name=module_name,
-      data_files=[('.', ['pyIMAPI2FSutil.dll'])],
+      data_files=[(".", [arch+"pyIMAPI2FSutil.dll"])],
       version="0.1",
       author="Kenneth Long",
       author_email="klong15@mail.greenriver.edu",
