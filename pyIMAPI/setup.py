@@ -60,7 +60,7 @@ elif "windows" in platform_string:
                         #extra_compile_args=[],
                         #extra_link_args=[])]#libcmt warning for command line built lib linked here? already tried nodefaultlib....
                     ]
-requirements = []
+requirements = ["pywin32",]
 
 if sys.version_info[0] < 3 and sys.version_info[1] < 7:
 	requirements.append('importlib')

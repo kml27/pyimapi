@@ -1,2 +1,2 @@
-recursive-include . *.py *.c *.h *.dll
+include . __init__.py
 prune ./build
