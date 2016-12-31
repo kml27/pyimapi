@@ -17,6 +17,7 @@ extern "C"
 	PYIMAPI_API void *fcreateIMAPI2FS(void);
 	PYIMAPI_API void fdeleteIMAPI2FS(void *);
 	PYIMAPI_API char *fgetcwd(void *obj);
+	PYIMAPI_API void ffreecwd(char *cwd);
 	PYIMAPI_API char *fmkdir(void *obj, char *path);
 	PYIMAPI_API char *fchdir(void *obj, char *path);
 	PYIMAPI_API void fcloseImage(void *obj);

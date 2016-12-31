@@ -27,9 +27,15 @@ CpyIMAPIObject::CpyIMAPIObject()
 	REFIID FSI_IID = __uuidof(IFileSystemImage);
 
 	HRESULT hr = S_OK;
+	
+	printf("DLL built at %s\n", __TIME__);
 
+	int len = GetCurrentDirectoryA(0, NULL);
+	char *cwd = new char[len+1];
+	GetCurrentDirectoryA(255, cwd);
+	printf("%s\n", cwd);
 	//hr = CLSIDFromProgID(OLESTR("IMAPI2FS.MsftFileSystemImage"), &FSI_CLSID);
-
+	//printf("cocreateinstance");
 	hr = CoCreateInstance(FSI_CLSID, NULL, CLSCTX_INPROC_SERVER, FSI_IID, (void **)&FileSystem);
 
 	//todo: add support for other types of images like dvd and blu-ray
@@ -45,9 +51,9 @@ CpyIMAPIObject::CpyIMAPIObject()
 	if(hr != S_OK)
 	{
 		if (hr == IMAPI_E_INVALID_PARAM)
-			printf("invalid parameter");
+			printf("invalid parameter\n");
 		else if (hr == IMAPI_E_IMAGE_TOO_BIG)
-			printf("FreeMediaBlocks property is too small for estimated image size");
+			printf("FreeMediaBlocks property is too small for estimated image size\n");
 
 		//release cocreateinstanced instance
 		
@@ -56,18 +62,18 @@ CpyIMAPIObject::CpyIMAPIObject()
 	}
 
 	IFsiDirectoryItem *root = NULL;
-
+	//printf("get root");
 	FileSystem->get_Root(&root);
 	current_directory = root;
 
 	//fsi->put_FileSystemsToCreate(FsiFileSystemISO9660);
-
+	//printf("exiting ctor\n");
 	return;
 }
 
 void CpyIMAPIObject::set_volume_name(char * volumename)
 {
-	size_t size = strlen(volumename);
+	size_t size = strlen(volumename)+1;
 	if (size > 255)
 		return;
 
@@ -84,7 +90,7 @@ char * CpyIMAPIObject::get_volume_name()
 	BSTR bstr_volumename;
 	FileSystem->get_VolumeName(&bstr_volumename);
 
-	int len = SysStringLen(bstr_volumename);
+	int len = SysStringLen(bstr_volumename)+1;
 
 	char *volumename = new char[len];
 	//copy bstr to normal c str
@@ -135,11 +141,7 @@ char* CpyIMAPIObject::add(char *filename)
 	wsprintf(wfullpath, L"%s\\%s", wfullpath, wfilename);
 	*/
 	//path
-	BSTR bfilename = SysAllocString(wfilename);
-
-	int len = GetCurrentDirectoryA(0, NULL);
-	char *cwd = new char[len];
-	GetCurrentDirectoryA(255, cwd);
+	BSTR bfilename = _com_util::ConvertStringToBSTR(filename);
 
 	IStream *file_stream = NULL;
 
@@ -172,7 +174,7 @@ An IStream interface of the file (data stream) to write to the media.
 
 		//IFsiFileItem *file_item = NULL;
 		hr = current_directory->AddFile(bfilename, file_stream);
-		IFsiFileItem *out;
+		//IFsiFileItem *out;
 	//	FileSystem->CreateFileItem(wfilename, &out);
 
 		//out->put_Data(file_stream);
@@ -207,17 +209,16 @@ char **CpyIMAPIObject::list()
 	IFsiItem *item;
 	ULONG return_count = 0;
 
-	while (S_OK == fsi_enum->Next(1, &item, &return_count) && return_count==1)
+	for (i=0;S_OK == fsi_enum->Next(1, &item, &return_count) && return_count==1;i++)
 	{
 		BSTR str = NULL;
 
 		item->get_FullPath(&str);
 		//https://msdn.microsoft.com/en-us/library/ms235631.aspx
-		size_t newsize = (SysStringLen(str) + 1) * 2;
-		paths[i] = new char[newsize];
-
-		strcpy_s(paths[i], newsize, _com_util::ConvertBSTRToString(str));
 		
+		//allocated with new []
+		paths[i] = _com_util::ConvertBSTRToString(str);
+		//printf("%s", paths[i]);
 	}
 
 	return paths;
@@ -226,32 +227,34 @@ char **CpyIMAPIObject::list()
 
 char *CpyIMAPIObject::getCWD()
 {
-	BSTR bpath;
+	BSTR bpath = NULL;
 	//current internal image file path
 	current_directory->FileSystemPath(fs_type, &bpath);
+	char *path = NULL;
+
 	//directory stash files are built in
 	//FileSystem->get_WorkingDirectory(&bpath);
-	int len = (SysStringLen(bpath)+1)*2;
-	char *path = new char[len];
-
-	strcpy_s(path, len, _com_util::ConvertBSTRToString(bpath));
+	int len = (SysStringLen(bpath) + 1);//*2;
+	if (len > 0)
+	{
+		//printf("%d\n", len);
+		//allocated with new []
+		path = _com_util::ConvertBSTRToString(bpath);
+	}
 
 	return path;
 }
 
 wchar_t * CpyIMAPIObject::getwCWD()
 {
+	printf("unimplemented wide char cwd\n");
 	return nullptr;
 }
 
 char *CpyIMAPIObject::setCWD(char * path)
 {
-	wchar_t wpath[257];
-	size_t size;
-	::mbstowcs_s(&size, wpath, path, 256);
-
 	//path
-	BSTR bpath = SysAllocString(wpath);
+	BSTR bpath = _com_util::ConvertStringToBSTR(path);
 	IFsiDirectoryItem *dir;
 	IFsiItem *item;
 	
@@ -275,13 +278,17 @@ char *CpyIMAPIObject::setCWD(char * path)
 
 char *CpyIMAPIObject::mkdir(char *path)
 {
-	wchar_t wpath[257];
-	size_t size;
-	::mbstowcs_s(&size, wpath, path, 256);
-
-	//path
-	BSTR bpath = SysAllocString(wpath);
+	if (FileSystem == nullptr || current_directory == nullptr)
+	{
+		printf("nullptr member\n");
+		return "FileSystem not initialized properly\n";
+	}
+	
+	printf("%s\n", path);
+	
+	BSTR bpath = _com_util::ConvertStringToBSTR(path);
 	IFsiDirectoryItem *dir;
+	
 	FileSystem->CreateDirectoryItem(bpath, &dir);
 	
 	current_directory->Add(dir);
@@ -298,19 +305,18 @@ bool CpyIMAPIObject::exists(char * filename)
 {
 	IFsiItem *file;
 	
-	wchar_t wfilename[257];
-	size_t size;
-	::mbstowcs_s(&size, wfilename, filename, 256);
+	char fullpath[512];
 
-	wchar_t wfullpath[512];
+	printf("in exists\n");
+	char *cwd = getCWD();
+	printf("after getcwd\n");
 
-	::mbstowcs_s(&size, wfullpath, getCWD(), 512);
-
-	wsprintf(wfullpath, L"%s\\%s", wfullpath, wfilename);
-
+	sprintf_s(fullpath, 512, "%s\\%s", cwd, filename);
+	printf("after sprintf\n");
+	delete []cwd;
 	//path
-	BSTR bfilename = SysAllocString(wfilename);
-	BSTR bfullpath = SysAllocString(wfullpath);
+	BSTR bfilename = _com_util::ConvertStringToBSTR(filename);
+	BSTR bfullpath = _com_util::ConvertStringToBSTR(fullpath);
 	
 	FsiItemType type;
 

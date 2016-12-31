@@ -36,9 +36,9 @@ if "linux" in platform_string:
 
 elif "windows" in platform_string:
     if "amd64" in platform_string:
-        arch="x64\\debug\\"
+        arch="x64"
     else:
-        arch="win32\\debug\\"
+        arch="x86"
     temp_directory = "c:\\temp"
 
 #check for <drive>:\temp dir
@@ -54,9 +54,10 @@ elif "windows" in platform_string:
     ext_modules =   [
                         Extension(module_name,
                         ext_files,#,
-                        libraries=[arch+"pyIMAPI2FSutil"],
+                        libraries=["pyIMAPI2FS-dll\\"+arch+"\\pyIMAPI2FSutil"],
                         extra_compile_args=["/Zi"],#,"/LDd"],#if /LDd is specified, my setuptools and pip have the dll link occur to python27_d.lib
                         extra_link_args=["/DEBUG", "/PDB:c:\\temp\\"+module_name+".pdb"]),#libcmt warning for command line built lib linked here? already tried nodefaultlib....
+                        #runtime_library_dirs=["pyIMAPI2FS-dll\\x86", "pyIMAPI2FS-dll\\x64"]),
                         #Extension("py_ex1",
                         #ext_files,#,
                         #libraries=[],
@@ -70,13 +71,19 @@ if sys.version_info[0] < 3 and sys.version_info[1] < 7:
 
 #name is the name of the package to pip and distutils
 setup(name=module_name,
-      data_files=[(".", [arch+"pyIMAPI2FSutil.dll"])],
+      include_package_data=True,
+      #package_data={"x86":["x86\\pyIMAPI2FSutil.dll"], "x64":["x64\\pyIMAPI2FSutil.dll"]},
+      #package_dir={"x86":["x86\\pyIMAPI2FSutil.dll"], "x64":["x64\\pyIMAPI2FSutil.dll"]},
+      #packages=["pyIMAPI2FS"],#,"pyIMAPI2FS\\x64","pyIMAPI2FS\\x86"],
+      #scripts=["post.py"],
+      data_files=[(".", ["pyIMAPI2FS-dll\\"+arch+"\\pyIMAPI2FSutil.dll"])],
       version="0.1",
       author="Kenneth Long",
       author_email="klong15@mail.greenriver.edu",
+      #options={}
       #mercurial
       url="http://bitbucket.org/ken_long/pyIMAPI2FS/",
-      description="A python module to provide a tarfile like object for creating ISO 9660 files using IMAPI2 FileSystem on Windows",
+      description="A python module to provide a tarfile like object for creating ISO 9660 files using IMAPI2 FileSystem COM object on Windows",
       license="MIT License",#"Creative Commons v3",
       test_suite='tests.test_all',
       install_requires=requirements,
