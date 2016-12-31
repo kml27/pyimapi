@@ -1,0 +1,2 @@
+recursive-include . *.py *.cpp *.c *.h *.sln *.vcxproj
+recursive-include ./pyIMAPI2FS-dll *.dll *.lib *.pdb

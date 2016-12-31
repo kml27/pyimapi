@@ -14,13 +14,17 @@
 extern "C"
 {
 #endif
-	PYIMAPI_API void *fcreateIMAPI2FS(void);
+	PYIMAPI_API void *fcreateIMAPI2FS(char *filename, char *mode);
+	PYIMAPI_API void fdeleteIMAPI2FS(void *);
 	PYIMAPI_API char *fgetcwd(void *obj);
-	PYIMAPI_API void fimageclose(void *obj);
+	PYIMAPI_API void ffreecwd(char *cwd);
+	PYIMAPI_API char *fmkdir(void *obj, char *path);
+	PYIMAPI_API char *fchdir(void *obj, char *path);
+	PYIMAPI_API void fcloseImage(void *obj);
 	PYIMAPI_API int fexists(void *obj, char *filename);
 	PYIMAPI_API char **flist(void *obj);
 	PYIMAPI_API void ffreelist(void *obj, char **paths);
-	PYIMAPI_API int fadd(void *obj, char *filename);
+	PYIMAPI_API char *fadd(void *obj, char *filename);
 	PYIMAPI_API void fremove(void *obj, char *filename);
 
 #ifndef LONG
@@ -43,15 +47,22 @@ class  CpyIMAPIObject
 	IFsiDirectoryItem*	root;
 	IFsiDirectoryItem*	current_directory;
 	IFileSystemImage*	FileSystem;
+	FsiFileSystems		fs_type;
+	IFsiItem*			item_iter;
+
+	IStream*	output_file;
 
 public:
-	CpyIMAPIObject(void);
+	CpyIMAPIObject(char *filename, char *mode);
+	~CpyIMAPIObject(void);
 	// TODO: add your methods here.
 	void		set_volume_name(char* volumename);
 	char*		get_volume_name();
-	void		add(char* filename);//, char *dest_filename);
+	char*		add(char* filename);//, char *dest_filename);
 	char*		getCWD();
 	wchar_t*	getwCWD();
+	char*		setCWD(char *path);
+	char*		mkdir(char *path);
 	bool		exists(char* filename);
 	char**		list();
 	void		freelist(char **list);
@@ -59,6 +70,9 @@ public:
 	LONG		count();
 	void		close();
 	void		remove(char *filename);
+
+	//return IsoInfo object
+	void*		next();
 };
 
 /*
