@@ -28,7 +28,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(lpCmdLine);
 
     // TODO: Place code here.
-	void *obj = fcreateIMAPI2FS();
+	void *obj = fcreateIMAPI2FS("testiso", "a");
 	char*r = fmkdir(obj, "test");
 	char *test = fgetcwd(obj);
 	r = fchdir(obj, "test");

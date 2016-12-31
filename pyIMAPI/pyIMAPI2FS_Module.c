@@ -7,8 +7,8 @@
 #include <windows.h>
 
 #define error_name						"IMAPI2Error"
-#define module_name						"pyIMAPI2FS"
-#define error_type_name					"pyIMAPI2FS.IMAPI2Error"
+#define module_name						"pyIMAPI"
+#define error_type_name					module_name"."error_name
 
 #define filesystem_type_name			"FileSystem"
 
@@ -42,7 +42,8 @@ static PyTypeObject imapi2fs_type_object;
 typedef struct {
 	PyObject_HEAD
 		//PyObject		*object_attr;
-		//PyObject		*filename_str;
+		PyObject		*filename_str;
+		char			*filename;
 		FILE			*file_handle;
 		void			*IMAPI2FS_Object;
 } imapi2fs_object;
@@ -68,7 +69,8 @@ static PyObject *imapi2fs_add(PyObject *self, PyObject *args)
 	if (obj == NULL)
 		Py_RETURN_NONE;
 
-	PyArg_ParseTuple(args, "s", &filename);
+	if (!PyArg_ParseTuple(args, "s", &filename))
+		return NULL;
 
 	fadd(obj->IMAPI2FS_Object, filename);
 
@@ -81,14 +83,15 @@ static PyObject *imapi2fs_mkdir(PyObject *self, PyObject *args)
 
 	char *filename = NULL;
 
-	printf("mkdir");
+	//printf("mkdir");
 
 	if (obj == NULL)
 		Py_RETURN_NONE;
 
-	PyArg_ParseTuple(args, "s", &filename);
+	if (!PyArg_ParseTuple(args, "s", &filename))
+		return NULL;
 
-	fmkdir(obj, filename);
+	fmkdir(obj->IMAPI2FS_Object, filename);
 
 	Py_RETURN_NONE;
 }
@@ -98,14 +101,15 @@ static PyObject *imapi2fs_chdir(PyObject *self, PyObject *args)
 
 	char *filename = NULL;
 
-	printf("chdir");
+	//printf("chdir\n");
 
 	if (obj == NULL)
 		Py_RETURN_NONE;
 
-	PyArg_ParseTuple(args, "s", &filename);
+	if (!PyArg_ParseTuple(args, "s", &filename))
+		return NULL;
 
-	fchdir(obj, filename);
+	fchdir(obj->IMAPI2FS_Object, filename);
 
 	Py_RETURN_NONE;
 }
@@ -143,16 +147,13 @@ static PyObject *imapi2fs_list(PyObject *self, PyObject *args, PyObject *keywds)
 	static char *kwlist[] = { "verbose", NULL };
 
 	int number_files=0;
-	char *value_format_specifier;
 	char **paths;
 	int count = 0;
-	PyObject *retval;
 	int i=0;
 	//get number of files
 
 	char verbose = 1;
 	PyObject *list = NULL, *item = NULL;
-
 
 	//printf("entering list()");
 
@@ -168,9 +169,6 @@ static PyObject *imapi2fs_list(PyObject *self, PyObject *args, PyObject *keywds)
 	paths = flist(obj->IMAPI2FS_Object);
 
 	//get each full file path
-	//value_format_specifier = "[items]";//malloc(count+1);
-	//value_format_specifier[count] = 0;
-	//memset(value_format_specifier, 's', count);
 	//printf("buidling python list\n");
 
 	list = PyList_New(count);
@@ -206,6 +204,11 @@ static PyObject *imapi2fs_extract(PyObject *self, PyObject *args, PyObject *keyw
 	if (!PyArg_ParseTupleAndKeywords(args, keywds, "s|s:keywords", kwlist, &member, &path))
 		return NULL;
 
+	//get file item in iso
+	//open local file handle
+	//write datastream to file
+	//close file
+
 	Py_RETURN_NONE;
 }
 
@@ -214,14 +217,15 @@ static PyObject *imapi2fs_exists(PyObject *self, PyObject *args)
 	imapi2fs_object *obj = get_imapi2fs(self);
 
 	char *filename = NULL;
-	printf("exists");
+	//printf("exists");
 
 	if (obj == NULL)
 		Py_RETURN_NONE;
 
-	PyArg_ParseTuple(args, "s", &filename);
+	if (!PyArg_ParseTuple(args, "s", &filename))
+		return NULL;
 
-	if(fexists(self, filename))
+	if(fexists(obj->IMAPI2FS_Object, filename))
 	{
 		Py_RETURN_TRUE;
 	}
@@ -240,8 +244,9 @@ static PyObject *imapi2fs_close(PyObject *self, PyObject *noarg)
 	if (obj != NULL)
 	{
 		printf("calling dll to close image");
-		fcloseImage(obj);
+		fcloseImage(obj->IMAPI2FS_Object);
 	}
+
 	printf("returning");
 
 	Py_RETURN_NONE;
@@ -257,7 +262,8 @@ static PyObject *imapi2fs_remove(PyObject *self, PyObject *args)
 	if (obj == NULL)
 		Py_RETURN_NONE;
 
-	PyArg_ParseTuple(args, "s", &filename);
+	if (!PyArg_ParseTuple(args, "s", &filename))
+		return NULL;
 
 	//result = 
 		fremove(obj->IMAPI2FS_Object, filename);
@@ -268,9 +274,7 @@ static PyObject *imapi2fs_remove(PyObject *self, PyObject *args)
 		Py_RETURN_FALSE;
 
 }
-
-//name should match that of filesystem_type_name
-//while Noddy/Shoddy examples in section 2 of extending python use (PyCFunction) for all methods...
+//methods array with which to set tp_methods struct member
 static PyMethodDef FileSystem_methods[] =	{	//name, function, args (METH_NOARGS, METH_VARARGS, METH_VARARGS|METH_KEYWORDS), description
 												{"add", (PyCFunction)imapi2fs_add,  METH_VARARGS, PyDoc_STR("add a file to the ISO filesystem") },
 												{"mkdir", (PyCFunction)imapi2fs_mkdir, METH_VARARGS, PyDoc_STR("make a directory in the ISO filesystem") },
@@ -287,7 +291,7 @@ static PyMethodDef FileSystem_methods[] =	{	//name, function, args (METH_NOARGS,
 //static PySequenceMethods FileSystem_sequence_methods[]={}
 static imapi2fs_object *imapi2fs_explain(PyTypeObject *type, PyObject *arg)
 {
-	printf("FileSystem objects cannot be instantiated directly, use pyIMAPI2FS.open()");
+	printf("FileSystem objects cannot be instantiated directly, use "module_name".open()");
 	return NULL;
 }
 
@@ -296,7 +300,7 @@ static imapi2fs_object *imapi2fs_object_new(PyTypeObject *type, PyObject *arg)
 {	//ptr to modules object type
 	imapi2fs_object *self;
 
-	printf("using object_new\n");
+	//printf("using object_new\n");
 	//printf("type object matches %i", type == &imapi2fs_type_object);
 	//DebugBreak();
 	//allocate a new object, referencing static object instance for typechecking(?)
@@ -345,7 +349,7 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 	//time(&ctime);
 
 	const char *filename = "testiso";//asctime(localtime(&ctime));
-	char *mode = "a+";
+	char *mode = "a";
 	FILE *handle = NULL;
 	void *fsi = NULL;
 
@@ -376,16 +380,16 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 	*/
 
 	//should have IMAPI2 FS object create this file... here as a placeholder for now
-	handle = fopen(filename, mode);
+	/*handle = fopen(filename, mode);
 
 	if (handle == NULL)
 	{
 		printf("error opening file");
 		//create error if error opening file
-	}
+	}*/
 	
 	//printf("about to create internal object");
-	fsi = fcreateIMAPI2FS();
+	fsi = fcreateIMAPI2FS(filename, mode);
 	//printf("%d", type);
 	//printf("self is %p\n", self);
 	
@@ -398,16 +402,18 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 	//members, NOT ob_type
 	obj = imapi2fs_object_new(&pyIMAPI2FS_type, 0);
 	
-	obj->file_handle = handle;
+	//obj->file_handle = handle;
 	//printf("after set file handle\n");
 	obj->IMAPI2FS_Object = fsi;
 	//printf("after set internal obj instance\n");
+	obj->filename = malloc(strlen(filename) + 1);
+	memcpy(obj->filename, filename, strlen(filename));
 	
-	//str = PyString_FromString(filename);
+	str = PyString_FromString(filename);
 
 	//inc ref pyobjects
 	//Py_INCREF(str);
-	//obj->filename_str = str;
+	obj->filename_str = str;
 
 	return (PyObject *)obj;
 }
@@ -437,7 +443,7 @@ static PyObject *imapi2fs_isFileSystem(PyObject *self, PyObject *args)
 static PyMethodDef IMAPI2FS_methods[] = {
 	//python function name, actual/export function name, calling convention (METH_VARARGS, METH_NOARGS, or METH_VARARGS|METH_KEYWORDS or rarely old obsolete 0)
 	{ "open", (PyCFunction)imapi2fs_open, METH_KEYWORDS, "Create or open a new IMAPI2 FileSystem object with the optionally provided filename ('<time>') and stdlib open mode ('a+')" },
-	{ "is_FileSystem", imapi2fs_isFileSystem, METH_VARARGS, "Return true if name is an pyIMAPI2FS.FileSystem that this module can " },
+	{ "is_FileSystem", imapi2fs_isFileSystem, METH_VARARGS, "Return true if name is an "module_name".FileSystem that this module can " },
 	//NULL termination block (SENTINEL)
 	//{ NULL, NULL, 0, NULL }
 	//another example has sentinel as
@@ -445,7 +451,7 @@ static PyMethodDef IMAPI2FS_methods[] = {
 };
 static void imapi2fs_dealloc(imapi2fs_object *self)
 {
-	printf("deallocing obj");
+	//printf("deallocing obj");
 	/*
 	Now a Noddy object doesn't do very much and so doesn't need to implement many type methods.One you
 	can't avoid is handling deallocation, so we find
@@ -470,14 +476,16 @@ static void imapi2fs_dealloc(imapi2fs_object *self)
 	*/
 
 	fdeleteIMAPI2FS(self->IMAPI2FS_Object);
-
+	
+	free(self->filename);
 	//Py_XDECREF(self->object_attr);
 	//Py_XDECREF(self->file_handle);
-	//Py_XDECREF(self->filename_str);
+	Py_XDECREF(self->filename_str);
 	//printf("closing file handle %d\n", self->file_handle);
 	
-	if(self->file_handle!=NULL)
+	/*if(self->file_handle!=NULL)
 		fclose(self->file_handle);
+	*/
 
 	//printf("using self ob_type %p"/* free %p"*/, self->ob_type);//, (self->ob_type != NULL ? self->ob_type->tp_free : self->ob_type));
 	self->ob_type->tp_free((PyObject*)self);
@@ -501,7 +509,7 @@ static int imapi2fs_print(imapi2fs_object *self, FILE *fp, int flags)
 	//>>>test
 	//IMAPI2FS FileSystem
 	Py_BEGIN_ALLOW_THREADS
-	fprintf(fp, "IMAPI2FS FileSystem %d", 0);
+	fprintf(fp, "IMAPI2FS FileSystem: %s", self->filename);
 	Py_END_ALLOW_THREADS
 	return status;
 }
@@ -664,7 +672,7 @@ typedef PyObject *(*allocfunc)(struct _typeobject *, Py_ssize_t);
 //only function in module.def/exports that is not static, #define is either void for C or extern "C" for C++
 PyMODINIT_FUNC
 //documentation specified init<module_name>( void )
-initpyIMAPI2FS(void)
+initpyIMAPI(void)
 {
 	//declare module instance pointer
 	PyObject *module_instance;

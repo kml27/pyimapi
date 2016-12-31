@@ -17,4 +17,4 @@ copy /y win32\Debug\pyIMAPI2FSutil.lib pyIMAPI2FS-dll\x86
 copy /y win32\Debug\pyIMAPI2FSutil.pdb pyIMAPI2FS-dll\x86
 
 python setup.py sdist
-pip install --upgrade ./dist/pyIMAPI2FS-0.1.tar.gz
+pip install --upgrade ./dist/pyIMAPI-0.1.tar.gz

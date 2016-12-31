@@ -4,7 +4,7 @@ import sys
 import platform
 
 platform_string = " ".join(platform.uname()).lower()
-module_name="pyIMAPI2FS"
+module_name="pyIMAPI"
 
 print("platform uname: ", platform_string)
 
@@ -83,7 +83,7 @@ setup(name=module_name,
       #options={}
       #mercurial
       url="http://bitbucket.org/ken_long/pyIMAPI2FS/",
-      description="A python module to provide a tarfile like object for creating ISO 9660 files using IMAPI2 FileSystem COM object on Windows",
+      description="A python module to provide a tarfile like object for creating ISO 9660 files using IMAPI2 FileSystem COM object on Windows (I feel happy!)",
       license="MIT License",#"Creative Commons v3",
       test_suite='tests.test_all',
       install_requires=requirements,

@@ -8,7 +8,7 @@
 
 // This is an example of an exported function.
 
-CpyIMAPIObject::CpyIMAPIObject()
+CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode)
 {
 	/*MsftRawCDImageCreator *cd_ic = NULL;
 	LPVOID COMptr = NULL;
@@ -30,10 +30,12 @@ CpyIMAPIObject::CpyIMAPIObject()
 	
 	printf("DLL built at %s\n", __TIME__);
 
-	int len = GetCurrentDirectoryA(0, NULL);
-	char *cwd = new char[len+1];
-	GetCurrentDirectoryA(255, cwd);
-	printf("%s\n", cwd);
+	//int len = GetCurrentDirectoryA(0, NULL);
+	//char *cwd = new char[len+1];
+	//GetCurrentDirectoryA(255, cwd);
+	//printf("%s\n", cwd);
+	//delete[] cwd;
+
 	//hr = CLSIDFromProgID(OLESTR("IMAPI2FS.MsftFileSystemImage"), &FSI_CLSID);
 	//printf("cocreateinstance");
 	hr = CoCreateInstance(FSI_CLSID, NULL, CLSCTX_INPROC_SERVER, FSI_IID, (void **)&FileSystem);
@@ -61,16 +63,65 @@ CpyIMAPIObject::CpyIMAPIObject()
 		return;
 	}
 
-	IFsiDirectoryItem *root = NULL;
 	//printf("get root");
 	FileSystem->get_Root(&root);
 	current_directory = root;
 
+	//printf("%p\n", this);
+
 	//fsi->put_FileSystemsToCreate(FsiFileSystemISO9660);
 	//printf("exiting ctor\n");
+
+
+	wchar_t wfilename[257];
+	size_t size;
+	::mbstowcs_s(&size, wfilename, filename, 256);
+	
+	DWORD grfMode = STGM_SHARE_DENY_WRITE;
+	bool create = FALSE;
+
+	if (!strcmp(mode, "a"))
+	{
+		//'a' from python Tarfile docs
+		/*
+		Open for appending with no compression. The file is created if it does not exist.
+		*/
+		grfMode |= STGM_READWRITE | STGM_CREATE;
+		create = TRUE;
+	}
+	else if(!strcmp(mode, "r"))
+	{
+		grfMode |= STGM_READ;
+	}
+	else if (!strcmp(mode, "w"))
+	{
+		grfMode |= STGM_WRITE;
+	}
+
+	//STGOPTIONS
+	//StgOpenStorageEx(wfilename, grfMode,)
+
+	 hr = SHCreateStreamOnFileEx(		wfilename, 
+										grfMode, 
+										FILE_ATTRIBUTE_NORMAL, 
+										create, 
+										NULL, 
+										&output_file);
+	
+	 printf("create %s with mode %s had result %d", filename, mode, hr);
+
 	return;
 }
 
+CpyIMAPIObject::~CpyIMAPIObject()
+{
+	if(root != current_directory)
+		current_directory->Release();
+
+	root->Release();
+
+	output_file->Release();
+}
 void CpyIMAPIObject::set_volume_name(char * volumename)
 {
 	size_t size = strlen(volumename)+1;
@@ -116,10 +167,32 @@ LONG CpyIMAPIObject::count()
 }
 
 void CpyIMAPIObject::createISO()
-{}
+{
+	IFileSystemImageResult *iso;
+	//instantiate imageresult
+	HRESULT hr = FileSystem->CreateResultImage(&iso);
+
+	IStream *isostream;
+	iso->get_ImageStream(&isostream);
+	
+	LARGE_INTEGER offset;
+	offset.LowPart = 0;
+	offset.HighPart = 0;
+
+	output_file->Seek(offset, STREAM_SEEK_SET, NULL);
+	
+	STATSTG isostat;
+	isostream->Stat(&isostat, FALSE);
+
+	isostream->CopyTo(output_file, isostat.cbSize, NULL, NULL);
+	isostream->Release();
+	
+}
 
 void CpyIMAPIObject::close()
-{}
+{
+	createISO();
+}
 
 /*
 char* CpyIMAPIObject::add(char *filename, char *dest)
@@ -128,9 +201,12 @@ char* CpyIMAPIObject::add(char *filename, char *dest)
 
 char* CpyIMAPIObject::add(char *filename)
 {
+	char *result = "File could not be added. File not found";
+
 	wchar_t wfilename[257];
 	size_t size;
 	::mbstowcs_s(&size, wfilename, filename, 256);
+
 	if (size > 255)
 		return "Filename exceeds 255 characters";
 	/*
@@ -145,43 +221,53 @@ char* CpyIMAPIObject::add(char *filename)
 
 	IStream *file_stream = NULL;
 
-	HRESULT hr = SHCreateStreamOnFileEx(wfilename,
-								STGM_READ|STGM_SHARE_DENY_WRITE,
-								FILE_ATTRIBUTE_NORMAL,
-								FALSE, 
-								NULL,
-								&file_stream);
-
-/*
-HRESULT AddFile(
-[in] BSTR    path,
-[in] IStream *fileData
-);
-
-Parameters
-
-path [in]
-String that contains the relative path of the directory to contain the new file.
-Specify the full path when calling this method from the root directory item.
-fileData [in]
-An IStream interface of the file (data stream) to write to the media.
-*/
-	char *result = "File could not be added. File not found";
-
-	if (file_stream != NULL)
+	if (PathIsDirectory(wfilename))
 	{
-		//wchar_t *wfullpath = getFullPath(wfilename);
+		//add tree
+		printf("add tree\n");
+		current_directory->AddTree(bfilename, TRUE);
+	}
+	else
+	{
+		HRESULT hr = SHCreateStreamOnFileEx(wfilename,
+			STGM_READ | STGM_SHARE_DENY_WRITE,
+			FILE_ATTRIBUTE_NORMAL,
+			FALSE,
+			NULL,
+			&file_stream);
 
-		//IFsiFileItem *file_item = NULL;
-		hr = current_directory->AddFile(bfilename, file_stream);
-		//IFsiFileItem *out;
-	//	FileSystem->CreateFileItem(wfilename, &out);
+		/*
+		HRESULT AddFile(
+		[in] BSTR    path,
+		[in] IStream *fileData
+		);
 
-		//out->put_Data(file_stream);
+		Parameters
 
-		file_stream->Release();
-		//out->Release();
-		result = "File Added";
+		path [in]
+		String that contains the relative path of the directory to contain the new file.
+		Specify the full path when calling this method from the root directory item.
+		fileData [in]
+		An IStream interface of the file (data stream) to write to the media.
+		*/
+		
+		if (file_stream != NULL)
+		{
+			//wchar_t *wfullpath = getFullPath(wfilename);
+
+			//IFsiFileItem *file_item = NULL;
+			hr = current_directory->AddFile(bfilename, file_stream);
+			//IFsiFileItem *out;
+		//	FileSystem->CreateFileItem(wfilename, &out);
+
+			//out->put_Data(file_stream);
+
+			file_stream->Release();
+			//out->Release();
+			result = "File Added";
+		}
+
+
 	}
 	
 	SysFreeString(bfilename);
@@ -227,6 +313,8 @@ char **CpyIMAPIObject::list()
 
 char *CpyIMAPIObject::getCWD()
 {
+	//printf("%p", this);
+	//printf("in getcwd dll\n");
 	BSTR bpath = NULL;
 	//current internal image file path
 	current_directory->FileSystemPath(fs_type, &bpath);
@@ -235,11 +323,24 @@ char *CpyIMAPIObject::getCWD()
 	//directory stash files are built in
 	//FileSystem->get_WorkingDirectory(&bpath);
 	int len = (SysStringLen(bpath) + 1);//*2;
-	if (len > 0)
+	
+	//if more than null terminated str
+	if (len > 1)
 	{
 		//printf("%d\n", len);
 		//allocated with new []
 		path = _com_util::ConvertBSTRToString(bpath);
+	}
+	else if (current_directory == root)
+	{
+		//these strs will always be freed with delete[], provide a new[] str for that purpose
+		//printf("root");
+		path = new char[3];
+		strcpy_s(path, 3, "\\");
+	}
+	else
+	{
+		printf("no dir");
 	}
 
 	return path;
@@ -253,51 +354,124 @@ wchar_t * CpyIMAPIObject::getwCWD()
 
 char *CpyIMAPIObject::setCWD(char * path)
 {
+	bool absolute = false;
+	bool free_path = false;
+
+	//if the path starts with root, use absolute path
+	if (strpbrk(path, "\\")==path)
+		absolute = true;
+
+	//if the strings are equal the diff is 0, not to test for equiv 
+	//should use strtok/strpbrk
+	if (!strcmp(path, ".."))
+	{
+		char *cwd = getCWD();
+		char *context, *cur, *prev;
+		
+		cur = strtok_s(cwd, "\\", &context);
+		
+		while (cur)
+		{
+			printf("%s\n", cur);
+			prev = cur;
+
+			cur = strtok_s(NULL, "\\", &context);
+			
+			if (cur == NULL)
+				*prev = NULL;
+		}
+
+		path = cwd;
+
+		printf("setting from absolute to %s\n", path);
+		free_path = true;
+	}
+
+	//printf("in setcwd dll\n");
 	//path
 	BSTR bpath = _com_util::ConvertStringToBSTR(path);
-	IFsiDirectoryItem *dir;
-	IFsiItem *item;
-	
-	current_directory->get_Item(bpath, &item);
+	IFsiDirectoryItem *dir = NULL;
+	IFsiItem *item = NULL;
+
+	//should be absolute/relative
+	if (absolute)
+	{
+		//printf("setting from root to %s\n", path);
+		root->get_Item(bpath, &item);
+		//printf("set from root\n");
+	}
+	else
+	{
+		current_directory->get_Item(bpath, &item);
+	}
 
 	SysFreeString(bpath);
 
-	item->QueryInterface(__uuidof(IFsiDirectoryItem), (void**) &dir);
-	
+	if (item != NULL)
+	{
+		item->QueryInterface(__uuidof(IFsiDirectoryItem), (void**)&dir);
+	}
+
 	char *result = "no such directory";
 
 	if (dir != NULL)
 	{
-		current_directory->Release();
+		
+		if (current_directory != root)
+		{
+			//printf("release directory\n");
+			current_directory->Release();
+		}
 		current_directory = dir;
 		result = "changed to directory";
 	}
+	else
+	{
+		//throw python exception!
+	}
+
+	//printf("%s\n", result);
+
+	if (free_path)
+		delete[]path;
 
 	return result;
 }
 
 char *CpyIMAPIObject::mkdir(char *path)
 {
+	//printf("%p\n", this);
+
+	//printf("in dll mkdir\n");
+
+	if (path == NULL || strlen(path) == 0)
+	{
+		return "null or empty str";
+	}
+
 	if (FileSystem == nullptr || current_directory == nullptr)
 	{
 		printf("nullptr member\n");
 		return "FileSystem not initialized properly\n";
 	}
 	
-	printf("%s\n", path);
+	//printf("%s\n", path);
 	
 	BSTR bpath = _com_util::ConvertStringToBSTR(path);
 	IFsiDirectoryItem *dir;
 	
-	FileSystem->CreateDirectoryItem(bpath, &dir);
-	
+	//printf("converted string\n");
+	//printf("%p\n", FileSystem);
+	HRESULT hr = FileSystem->CreateDirectoryItem(bpath, &dir);
+	//printf("created directory\n");
 	current_directory->Add(dir);
+	//printf("added directory\n");
 	//current_directory->AddDirectory(bpath);
 
 	dir->Release();
-
+	//printf("released directory item\n");
 	SysFreeString(bpath);
-
+	//printf("freed bstr\n");
 	return "nochk";
 }
 
@@ -307,12 +481,12 @@ bool CpyIMAPIObject::exists(char * filename)
 	
 	char fullpath[512];
 
-	printf("in exists\n");
+	//printf("in exists dll\n");
 	char *cwd = getCWD();
-	printf("after getcwd\n");
+	//printf("after getcwd\n");
 
 	sprintf_s(fullpath, 512, "%s\\%s", cwd, filename);
-	printf("after sprintf\n");
+	//printf("after sprintf\n");
 	delete []cwd;
 	//path
 	BSTR bfilename = _com_util::ConvertStringToBSTR(filename);
@@ -364,4 +538,10 @@ void CpyIMAPIObject::remove(char *filename)
 	current_directory->Remove(bfilename);
 
 	SysFreeString(bfilename);
+}
+
+//should create struct or ** of dict entries
+void *CpyIMAPIObject::next()
+{
+	return NULL;
 }
