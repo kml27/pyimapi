@@ -7,7 +7,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pyIMAPI2FSutil", "pyIMAPI.v
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Standalone", "Standalone\Standalone.vcxproj", "{A4EEA049-85B5-4DC4-BC94-318D868FE3B2}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pyIMAPI2FS", "pyIMAPI2FS.vcxproj", "{1E58FD7B-4ACE-41A8-B744-A3FBB1CE3DAE}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pyIMAPI2FS_Module", "pyIMAPI2FS.vcxproj", "{1E58FD7B-4ACE-41A8-B744-A3FBB1CE3DAE}"
+	ProjectSection(ProjectDependencies) = postProject
+		{0F9BB5A4-3FFA-430A-9098-7465B59F6163} = {0F9BB5A4-3FFA-430A-9098-7465B59F6163}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

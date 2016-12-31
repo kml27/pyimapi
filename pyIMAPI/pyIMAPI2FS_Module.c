@@ -236,18 +236,18 @@ static PyObject *imapi2fs_exists(PyObject *self, PyObject *args)
 static PyObject *imapi2fs_close(PyObject *self, PyObject *noarg)
 {
 	imapi2fs_object *obj = get_imapi2fs(self);
-	printf("close");
+	//printf("close");
 
 	if (obj == NULL)
 		Py_RETURN_NONE;
 
 	if (obj != NULL)
 	{
-		printf("calling dll to close image");
+		//printf("calling dll to close image");
 		fcloseImage(obj->IMAPI2FS_Object);
 	}
 
-	printf("returning");
+	//printf("returning");
 
 	Py_RETURN_NONE;
 }

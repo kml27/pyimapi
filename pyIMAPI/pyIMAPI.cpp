@@ -27,9 +27,9 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode)
 	REFIID FSI_IID = __uuidof(IFileSystemImage);
 
 	HRESULT hr = S_OK;
-	
+#ifdef _DEBUG
 	printf("DLL built at %s\n", __TIME__);
-
+#endif
 	//int len = GetCurrentDirectoryA(0, NULL);
 	//char *cwd = new char[len+1];
 	//GetCurrentDirectoryA(255, cwd);
@@ -101,14 +101,14 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode)
 	//STGOPTIONS
 	//StgOpenStorageEx(wfilename, grfMode,)
 
-	 hr = SHCreateStreamOnFileEx(		wfilename, 
+	hr = SHCreateStreamOnFileEx(		wfilename, 
 										grfMode, 
 										FILE_ATTRIBUTE_NORMAL, 
 										create, 
 										NULL, 
 										&output_file);
 	
-	 printf("create %s with mode %s had result %d", filename, mode, hr);
+	//printf("create %s with mode %s had result %d", filename, mode, hr);
 
 	return;
 }
@@ -224,7 +224,7 @@ char* CpyIMAPIObject::add(char *filename)
 	if (PathIsDirectory(wfilename))
 	{
 		//add tree
-		printf("add tree\n");
+		//printf("add tree\n");
 		current_directory->AddTree(bfilename, TRUE);
 	}
 	else
@@ -383,7 +383,7 @@ char *CpyIMAPIObject::setCWD(char * path)
 
 		path = cwd;
 
-		printf("setting from absolute to %s\n", path);
+		//printf("setting from absolute to %s\n", path);
 		free_path = true;
 	}
 
