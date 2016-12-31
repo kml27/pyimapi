@@ -69,14 +69,16 @@ requirements = []
 if sys.version_info[0] < 3 and sys.version_info[1] < 7:
 	requirements.append('importlib')
 
+import distutils.sysconfig
+print distutils.sysconfig.get_python_lib()
 #name is the name of the package to pip and distutils
 setup(name=module_name,
-      include_package_data=True,
+      #include_package_data=True,
       #package_data={"x86":["x86\\pyIMAPI2FSutil.dll"], "x64":["x64\\pyIMAPI2FSutil.dll"]},
       #package_dir={"x86":["x86\\pyIMAPI2FSutil.dll"], "x64":["x64\\pyIMAPI2FSutil.dll"]},
       #packages=["pyIMAPI2FS"],#,"pyIMAPI2FS\\x64","pyIMAPI2FS\\x86"],
       #scripts=["post.py"],
-      data_files=[(".", ["pyIMAPI2FS-dll\\"+arch+"\\pyIMAPI2FSutil.dll"])],
+      data_files=[(distutils.sysconfig.get_python_lib(), ["pyIMAPI2FS-dll\\"+arch+"\\pyIMAPI2FSutil.dll"])],
       version="0.1",
       author="Kenneth Long",
       author_email="klong15@mail.greenriver.edu",
