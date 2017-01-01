@@ -348,7 +348,7 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 	//time_t ctime;
 	//time(&ctime);
 
-	const char *filename = "testiso";//asctime(localtime(&ctime));
+	const char *filename = "default.iso";//asctime(localtime(&ctime));
 	char *mode = "a";
 	FILE *handle = NULL;
 	void *fsi = NULL;
