@@ -2,9 +2,9 @@
 //9.17.2016
 //IMAPI2 File System Python Module
 
+#include <windows.h>
 #include <Python.h>
 #include "pyIMAPI.h"
-#include <windows.h>
 
 #define error_name						"IMAPI2Error"
 #define module_name						"pyIMAPI"
@@ -33,19 +33,38 @@ AudioCD:	an IMAPI2 Raw Format DiscAtOnce compatible object\n\
 static PyObject *imapi2fs;
 static PyObject *imapi2fs_error;
 
-//to determine if the object is of this object type
-static PyTypeObject imapi2fs_type_object;
-
-//test if object is of ex2 object type
 #define object_check(t) (Py_TYPE(t) == &pyIMAPI2FS_type)
+
+//arguably global statics are a bad practice
+//less than a reg (slower than wasting a register... flags if more needed?)
+static char no_mount = 0;
+
+static HMODULE external_dll;
+
+//considered bad practice by some... const static int... 
+#define MAX_CLL 8191
+
+//const static int MAX_CLL = 8191;
+
+enum _objType
+{
+	imapi,		//creating an iso image in xp sp2+
+	mount,		//using powershell in win8+ to read the file
+	external,	//if 7z or alternative is used to work with iso files
+};
+
+typedef enum _objType objType;
 
 typedef struct {
 	PyObject_HEAD
-		//PyObject		*object_attr;
 		PyObject		*filename_str;
 		char			*filename;
-		FILE			*file_handle;
 		void			*IMAPI2FS_Object;
+		objType			type;
+		//use unicode and prepend "\\?\" to exceed max_path on newer windows before 10, 10 doesnt require it...
+		char			drive[2];
+		char			path[MAX_PATH];
+		int				open;
 } imapi2fs_object;
 
 static imapi2fs_object *get_imapi2fs(PyObject *self)
@@ -62,8 +81,15 @@ static PyObject *imapi2fs_add(PyObject *self, PyObject *args)
 {
 	imapi2fs_object *obj = get_imapi2fs(self);
 
+	char *result = "";
+
 	char *filename = NULL;
 
+	if (obj->type == mount)
+	{
+		PySys_WriteStdout("Mounted filesystem is read-only, cannot modiy image\n");
+		Py_RETURN_FALSE;
+	}
 	//printf("add");
 
 	if (obj == NULL)
@@ -72,9 +98,13 @@ static PyObject *imapi2fs_add(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "s", &filename))
 		return NULL;
 
-	fadd(obj->IMAPI2FS_Object, filename);
+	if (result = fadd(obj->IMAPI2FS_Object, filename))
+	{
+		PySys_WriteStdout(result);
+		Py_RETURN_FALSE;
+	}
 
-	Py_RETURN_NONE;
+	Py_RETURN_TRUE;
 }
 
 static PyObject *imapi2fs_mkdir(PyObject *self, PyObject *args)
@@ -87,6 +117,12 @@ static PyObject *imapi2fs_mkdir(PyObject *self, PyObject *args)
 
 	if (obj == NULL)
 		Py_RETURN_NONE;
+	
+	if (obj->type == mount)
+	{
+		PySys_WriteStdout("Mounted filesystem is read-only, cannot modiy image\n");
+		Py_RETURN_FALSE;
+	}
 
 	if (!PyArg_ParseTuple(args, "s", &filename))
 		return NULL;
@@ -109,9 +145,40 @@ static PyObject *imapi2fs_chdir(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "s", &filename))
 		return NULL;
 
-	fchdir(obj->IMAPI2FS_Object, filename);
+	switch (obj->type)
+	{
+		case imapi:
+		{
+			if (fchdir(obj->IMAPI2FS_Object, filename) == (void*)NULL)
+				Py_RETURN_TRUE;
 
-	Py_RETURN_NONE;
+			break;
+		}
+
+		case mount:
+		{
+			//exists would use mount_exists(obj, filename, ANY, concat)
+			
+			//chdir would use if(mount_exists(obj, filename, DIR, concat))
+			struct stat info;
+			char fullpath[MAX_PATH];
+			sprintf_s(fullpath, MAX_PATH, "%s:\\%s\\%s", obj->drive, obj->path, filename);
+			if (stat(fullpath, &info) == S_OK)
+			{
+				if (info.st_mode & S_IFDIR)
+				{
+					sprintf_s(obj->path, MAX_PATH, "%s\\%s", obj->path, filename);
+					Py_RETURN_TRUE;
+				}
+			}
+				
+			break;
+		}
+		case external:
+			break;
+	}
+
+	Py_RETURN_FALSE;
 }
 
 static PyObject *imapi2fs_getcwd(PyObject *self, PyObject *noarg)
@@ -126,15 +193,33 @@ static PyObject *imapi2fs_getcwd(PyObject *self, PyObject *noarg)
 	if (obj == NULL)
 		Py_RETURN_NONE;
 
-	cwd = fgetcwd(obj->IMAPI2FS_Object);
-	
-	ret = PyString_FromString(cwd);
+	switch (obj->type)
+	{
+		case imapi:
+		{
+			cwd = fgetcwd(obj->IMAPI2FS_Object);
 
-	ffreecwd(cwd);
+			ret = PyString_FromString(cwd);
 
-	if (ret == NULL)
-		Py_RETURN_NONE;
+			ffreecwd(cwd);
 
+			if (ret == NULL)
+				Py_RETURN_NONE;
+			break;
+		}
+		case mount:
+		{
+			if (strlen(obj->path))
+				ret = PyString_FromString(obj->path);
+			else
+				ret = PyString_FromString("\\");
+			break;
+		}
+		case external:
+		{
+			break;
+		}
+	}
 	//printf("building pyvalue");
 	return ret;
 }
@@ -163,28 +248,98 @@ static PyObject *imapi2fs_list(PyObject *self, PyObject *args, PyObject *keywds)
 	if (!PyArg_ParseTupleAndKeywords(args, keywds, "|b:keywords", kwlist, &verbose))
 		return NULL;
 
-	//printf("calling count");
-	count = fcount(obj->IMAPI2FS_Object);
-	//printf("calling list\n");
-	paths = flist(obj->IMAPI2FS_Object);
-
-	//get each full file path
-	//printf("buidling python list\n");
-
-	list = PyList_New(count);
-
-	if (count > 0 && list!=NULL)
+	switch (obj->type)
 	{
-		//printf("%d", count);
-		for (i = 0; i < count; i++)
+		case imapi:
 		{
-			//printf("%s", paths[i]);
-			item = PyString_FromString(paths[i]);
-			PyList_SET_ITEM(list, i, item);
+			//printf("calling count");
+			count = fcount(obj->IMAPI2FS_Object);
+
+			//printf("calling list\n");
+			paths = flist(obj->IMAPI2FS_Object);
+
+			//get each full file path
+			//printf("buidling python list\n");
+
+			list = PyList_New(count);
+
+			if (count > 0 && list != NULL)
+			{
+				//printf("%d", count);
+				for (i = 0; i < count; i++)
+				{
+					//printf("%s", paths[i]);
+					item = PyString_FromString(paths[i]);
+					PyList_SET_ITEM(list, i, item);
+				}
+			}
+
+			ffreelist(obj->IMAPI2FS_Object, paths);
+
+			break;
+		}
+		
+		case mount:
+		{
+			char temp[MAX_PATH+4];
+			WIN32_FIND_DATAA find;
+			HANDLE hFind;
+			BOOL avail = FALSE;
+
+			/*
+			When windows version checking is implemented, new versions of windows allow longer filenames
+			https://msdn.microsoft.com/en-us/library/windows/desktop/aa365247(v=vs.85).aspx
+			*/
+
+			sprintf_s(temp, MAX_PATH+4, "%s:\\%s\\*", obj->drive, obj->path);
+			//printf("%s\n", temp);
+			hFind = FindFirstFileA(temp, &find);
+			
+			if (hFind != INVALID_HANDLE_VALUE)
+			{
+				do
+				{
+					count++;
+				} while (FindNextFileA(hFind, &find));
+
+				FindClose(hFind);
+			}
+
+			hFind = FindFirstFileA(temp, &find);
+			
+			//printf("%d\n", count);
+			list = PyList_New(count);
+
+			if (hFind != INVALID_HANDLE_VALUE)
+			{				
+				do
+				{		
+					//printf("%s\n", find.cFileName);
+					item = PyString_FromString(find.cFileName);
+					PyList_SET_ITEM(list, i++, item);
+
+				} while ((avail = FindNextFileA(hFind, &find)) && i < count);
+
+				if (avail && i == count)
+				{
+					PySys_WriteStderr("Internal error buidling list, more items in image than found when enumerating\n");
+				}
+
+				FindClose(hFind);
+			}
+			else
+			{
+				printf("no files\n");
+			}
+
+			break;
+		}
+		
+		case external:
+		{
+			break;
 		}
 	}
-
-	ffreelist(obj->IMAPI2FS_Object, paths);
 
 	return list;
 }
@@ -195,21 +350,44 @@ static PyObject *imapi2fs_extract(PyObject *self, PyObject *args, PyObject *keyw
 
 	static char *kwlist[] = {"member","path",NULL};
 
-	char *member = "";
-	char *path = "";
+	char *isofile_member = "";
+	char *system_path = "";
 
 	if (obj == NULL)
 		Py_RETURN_NONE;
 
-	if (!PyArg_ParseTupleAndKeywords(args, keywds, "s|s:keywords", kwlist, &member, &path))
+	if (!PyArg_ParseTupleAndKeywords(args, keywds, "s|s:keywords", kwlist, &isofile_member, &system_path))
 		return NULL;
+	
+	printf("%s %s\n", isofile_member, system_path);
 
-	//get file item in iso
-	//open local file handle
-	//write datastream to file
-	//close file
+	switch (obj->type)
+	{
+		case imapi:
+		{
+			if (!strcmp(system_path, ""))
+				system_path = NULL;
 
-	Py_RETURN_NONE;
+			//get filesystem item from iso
+			if (!fextract(obj->IMAPI2FS_Object, isofile_member, system_path))
+				Py_RETURN_FALSE;
+
+			break;
+		}
+
+		case mount:
+		{
+			printf("mounted image extraction\n");
+			break;
+		}
+
+		case external:
+		{
+			break;
+		}
+	}
+
+	Py_RETURN_TRUE;
 }
 
 static PyObject *imapi2fs_exists(PyObject *self, PyObject *args)
@@ -225,9 +403,36 @@ static PyObject *imapi2fs_exists(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "s", &filename))
 		return NULL;
 
-	if(fexists(obj->IMAPI2FS_Object, filename))
+	switch (obj->type)
 	{
-		Py_RETURN_TRUE;
+		case imapi:
+		{
+			if (fexists(obj->IMAPI2FS_Object, filename))
+			{
+				Py_RETURN_TRUE;
+			}
+			break;
+		}
+
+		case mount:
+		{
+			struct stat info;
+			char fullpath[MAX_PATH];
+			sprintf_s(fullpath, MAX_PATH, "%s:\\%s\\%s", obj->drive, obj->path, filename);
+			//printf("%s\n", fullpath);
+			
+			if (stat(fullpath, &info) == S_OK)
+			{
+				//printf("stat returned 0, file info found\n");
+				Py_RETURN_TRUE;
+			}
+			break;
+		}
+
+		case external:
+		{
+			break;
+		}
 	}
 
 	Py_RETURN_FALSE;
@@ -241,15 +446,41 @@ static PyObject *imapi2fs_close(PyObject *self, PyObject *noarg)
 	if (obj == NULL)
 		Py_RETURN_NONE;
 
-	if (obj != NULL)
+	if (!obj->open)
 	{
-		//printf("calling dll to close image");
-		fcloseImage(obj->IMAPI2FS_Object);
+		//should this throw an exception?
+		Py_RETURN_FALSE;
+	}
+
+	switch (obj->type)
+	{
+		case imapi:
+			if (obj != NULL)
+			{
+				//printf("calling dll to close image");
+				fcloseImage(obj->IMAPI2FS_Object);
+			}
+			break;
+		case mount:
+		{
+			char dismount_ps[MAX_CLL];
+		
+			//printf("%s\n", obj->filename);
+			sprintf_s(dismount_ps, MAX_CLL, "powershell -Command \"Dismount-DiskImage -Image \"%s\"\"", obj->filename);
+			
+			system(dismount_ps);
+			
+			break;
+		}
+		case external:
+			break;
 	}
 
 	//printf("returning");
 
-	Py_RETURN_NONE;
+	obj->open = 0;
+
+	Py_RETURN_TRUE;
 }
 static PyObject *imapi2fs_remove(PyObject *self, PyObject *args)
 {
@@ -261,12 +492,18 @@ static PyObject *imapi2fs_remove(PyObject *self, PyObject *args)
 
 	if (obj == NULL)
 		Py_RETURN_NONE;
+	
+	if (obj->type == mount)
+	{
+		PySys_WriteStdout("Mounted filesystem is read-only, cannot modiy image\n");
+		Py_RETURN_FALSE;
+	}
 
 	if (!PyArg_ParseTuple(args, "s", &filename))
 		return NULL;
 
-	//result = 
-		fremove(obj->IMAPI2FS_Object, filename);
+	//nonzero success, zero fail (TRUE, FALSE)
+	result = fremove(obj->IMAPI2FS_Object, filename);
 
 	if(result)
 		Py_RETURN_TRUE;
@@ -291,7 +528,7 @@ static PyMethodDef FileSystem_methods[] =	{	//name, function, args (METH_NOARGS,
 //static PySequenceMethods FileSystem_sequence_methods[]={}
 static imapi2fs_object *imapi2fs_explain(PyTypeObject *type, PyObject *arg)
 {
-	printf("FileSystem objects cannot be instantiated directly, use "module_name".open()");
+	PySys_WriteStdout("FileSystem objects cannot be instantiated directly, use "module_name".open()");
 	return NULL;
 }
 
@@ -300,11 +537,8 @@ static imapi2fs_object *imapi2fs_object_new(PyTypeObject *type, PyObject *arg)
 {	//ptr to modules object type
 	imapi2fs_object *self;
 
-	//printf("using object_new\n");
-	//printf("type object matches %i", type == &imapi2fs_type_object);
-	//DebugBreak();
-	//allocate a new object, referencing static object instance for typechecking(?)
-	self = (imapi2fs_object *) type->tp_alloc(type, 0);//PyObject_New(imapi2fs_object, &imapi2fs_type_object);
+	//allocate a new object, referencing static object instance for typechecking
+	self = (imapi2fs_object *) type->tp_alloc(type, 0);
 
 	// NO INCREF DECREF 
 
@@ -314,33 +548,17 @@ static imapi2fs_object *imapi2fs_object_new(PyTypeObject *type, PyObject *arg)
 		Py_DECREF(self);
 		return NULL;
 	}
-	//set attr to NULL
-	//self->object_attr = NULL;
-	//self->filename_str = PyString_FromString("");
-	self->file_handle = NULL;
+	
 	self->IMAPI2FS_Object = NULL;
+
+	memset(self->drive, '\0', 2);
+	
+	self->filename = NULL;
+	self->open = 0;
+	self->type = imapi;
+
 	return self;
 }
-
-/******************************************************************************************************/
-/*out of place, required unless a prototype defined extern and supplied after object (for code organization)*/
-/*
-static PyObject *imapi2fs_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
-{
-	imapi2fs_object *obj;
-
-	if (!PyArg_ParseTuple(args, ":new"))
-		return NULL;
-
-	obj = imapi2fs_object_new(type, args);
-
-	if (obj == NULL)
-		return NULL;
-
-	return (PyObject *)obj;
-}
-*/
-
 
 static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 {
@@ -348,17 +566,25 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 	//time_t ctime;
 	//time(&ctime);
 
-	const char *filename = "default.iso";//asctime(localtime(&ctime));
+	char *filename = "default.iso";//asctime(localtime(&ctime));
 	char *mode = "a";
 	FILE *handle = NULL;
 	void *fsi = NULL;
-
-	//PyObject *filenameArg, *modeArg;
 
 	imapi2fs_object *obj = NULL;
 	PyObject *str = NULL;
 
 	static char *kwlist[] = {"filename", "mode", NULL};
+
+	objType type = imapi;
+
+	char *mount_drive = "z:\\";
+
+	char path[MAX_PATH];
+	char command[MAX_CLL];
+	char fullpath[MAX_CLL];
+	char drive[2];
+	FILE *newdrive;
 
 	//printf("parsing keywords\n");
 	//:open
@@ -371,28 +597,56 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 	
 	//printf("finished parsing keywords\n");
 	
-	
-	/*Py_BEGIN_ALLOW_THREADS
-		printf(filename);
-		printf(mode);//fprintf(fp, "ex2 object!", 0);
-		printf("\n");
-	Py_END_ALLOW_THREADS
-	*/
-
-	//should have IMAPI2 FS object create this file... here as a placeholder for now
-	/*handle = fopen(filename, mode);
-
-	if (handle == NULL)
+	if (!strcmp(mode, "a") || !strcmp(mode, "w"))
 	{
-		printf("error opening file");
-		//create error if error opening file
-	}*/
-	
-	//printf("about to create internal object");
-	fsi = fcreateIMAPI2FS(filename, mode);
-	//printf("%d", type);
-	//printf("self is %p\n", self);
-	
+		//printf("about to create internal object");
+		fsi = fcreateIMAPI2FS(filename, mode);
+		//printf("%d", type);
+		//printf("self is %p\n", self);
+	}
+	else if (!strcmp(mode, "r"))
+	{
+		type = mount;
+		//if using windows 8 or later (or powershell is installed)
+		//disks may be read by using powershell to mount the disk image
+
+		GetCurrentDirectoryA((DWORD)MAX_PATH, path);
+
+		sprintf_s(fullpath, MAX_PATH, "%s\\%s", path, filename);
+		filename = fullpath;
+		//printf("%s", filename);
+
+		sprintf_s(command, MAX_CLL, "powershell -Command \"Mount-DiskImage -Image \"%s\"\"", filename);
+		//printf("%s : %s",command);
+		
+		//ShellExecute(NULL, NULL, "powershell", mount_ps, NULL, )
+		system(command);
+
+		sprintf_s(command, MAX_CLL, "powershell -Command \"Get-DiskImage -ImagePath \"%s\" | Get-Volume | Select -ExpandProperty DriveLetter\" > newdrive", filename);
+		
+		//could also use DevicePath for more robust handling when implementing wcs/unicode
+		//powershell -Command "Get-DiskImage -ImagePath "c:\development\pyimapi2\pyimapi\default.iso" | Select -ExpandProperty DevicePath"
+
+		//printf("%s\n", command);
+
+		system(command);
+
+		//multiple instances cannot be run from the same working directory in this case
+		//update this to use process id to make id unique
+		fopen_s(&newdrive, "newdrive", "r");
+		
+		//very specific to single drive letter drives... rather than ole/wmi object path...
+		//should replace this... esp for unicode systems in languages besides en-us
+		fread(drive, 3, 1, newdrive);
+		//printf("%s\n", drive);
+		fclose(newdrive);
+		//remove("newdrive");
+		
+		//null terminate string
+		drive[1] = '\0';
+		//printf("%s\n", drive);
+	}
+
 	//when using tp_obj->tp_free with pyobject_new there is no crash when calling help(pyIMAPI2FS)
 	//though there is a crash on quit()
 	//there is a crash if PyObject_Del is used in dealloc instead? 
@@ -401,18 +655,24 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 	//this may be used for tp_new in pyIMAPI2FS_type, paramter 0 is object definition with all tp
 	//members, NOT ob_type
 	obj = imapi2fs_object_new(&pyIMAPI2FS_type, 0);
+
+	//copy drive letter to obj for ease of use in extract, list and similar functions
+	memcpy(obj->drive, drive, 2);
+	//printf("%s\n", obj->drive);
+	obj->open = 1;
+	obj->type = type;
+	memset(obj->path, 0, sizeof(obj->path));
 	
-	//obj->file_handle = handle;
 	//printf("after set file handle\n");
 	obj->IMAPI2FS_Object = fsi;
 	//printf("after set internal obj instance\n");
+
 	obj->filename = malloc(strlen(filename) + 1);
-	memcpy(obj->filename, filename, strlen(filename));
+	memcpy(obj->filename, filename, strlen(filename)+1);
 	
 	str = PyString_FromString(filename);
 
 	//inc ref pyobjects
-	//Py_INCREF(str);
 	obj->filename_str = str;
 
 	return (PyObject *)obj;
@@ -449,8 +709,14 @@ static PyMethodDef IMAPI2FS_methods[] = {
 	//another example has sentinel as
 	{ NULL, NULL }
 };
-static void imapi2fs_dealloc(imapi2fs_object *self)
+static void imapi2fs_dealloc(PyObject *self)
 {
+	imapi2fs_object *obj = get_imapi2fs(self);
+
+	if (obj == NULL)
+		return;
+
+
 	//printf("deallocing obj");
 	/*
 	Now a Noddy object doesn't do very much and so doesn't need to implement many type methods.One you
@@ -469,28 +735,41 @@ static void imapi2fs_dealloc(imapi2fs_object *self)
 
 	//based on source in xxmodule and _collections
 	//in case ex2_object_attr is null, using xdecref
-	//printf("obj to del is at %p\n", self);
-	//printf("deleting internal object\n");
-	/*if (self != NULL)
-		printf("internal obj at %p\n", self->IMAPI2FS_Object);
-	*/
-
-	fdeleteIMAPI2FS(self->IMAPI2FS_Object);
 	
-	free(self->filename);
+	switch (obj->type)
+	{
+		case imapi:
+		{
+			//printf("imapi close\n");
+			fdeleteIMAPI2FS(obj->IMAPI2FS_Object);
+			break;
+		}
+
+		case mount:
+		{
+			if (obj->open)
+			{
+				PySys_WriteStdout("Image %s was still open... Unmounting image...\n", obj->filename);
+				imapi2fs_close(self, NULL);
+			}
+			break;
+		}
+
+		case external:
+		{
+			//external_image_tool->unload();
+			break;
+		}
+	}
+
+	free(obj->filename);
 	//Py_XDECREF(self->object_attr);
 	//Py_XDECREF(self->file_handle);
-	Py_XDECREF(self->filename_str);
-	//printf("closing file handle %d\n", self->file_handle);
+	Py_XDECREF(obj->filename_str);
 	
-	/*if(self->file_handle!=NULL)
-		fclose(self->file_handle);
-	*/
-
-	//printf("using self ob_type %p"/* free %p"*/, self->ob_type);//, (self->ob_type != NULL ? self->ob_type->tp_free : self->ob_type));
+	//use fn ptr in struct to free
 	self->ob_type->tp_free((PyObject*)self);
 
-	//PyObject_Del(self);
 	/*
 	example from documentaiton
 
@@ -517,88 +796,35 @@ static int imapi2fs_print(imapi2fs_object *self, FILE *fp, int flags)
 static PyObject *imapi2fs_repr(imapi2fs_object *self)
 {
 	//can be called by test.__repr__()
-	return PyString_FromFormat("IMAPI2 FileSystem: %p", self);//, self->filename_str);
+	return PyString_FromFormat("IMAPI2 FileSystem: %s", self->filename);
 }
-/*
-static PyObject *imapi2fs_getattr(imapi2fs_object *self, char *name)
-{
-	printf("getattr char* called");
-	printf("getting attribute ");
-	printf(name);
-	printf("\n");
-
-	if (self->object_attr != NULL)
-	{
-		PyObject *attr = PyDict_GetItemString(self->object_attr, name);
-		if (attr != NULL)
-		{
-			Py_INCREF(attr);
-			return attr;
-		}
-	}
-
-	printf("trying py_findmethod\n");
-
-	//cast due to the call originally being of the modules object type
-	return Py_FindMethod(IMAPI2FS_methods, (PyObject *)self, name);
-}
-
-static PyObject *imapi2fs_setattr(imapi2fs_object *self, char *name, PyObject *obj)
-{
-	printf("set attr char* called");
-	if (self->object_attr == NULL)
-	{
-		//allocate attr
-		self->object_attr = PyDict_New();
-
-		//if alloc failed, return -1 as error
-		if (self->object_attr == NULL)
-			return NULL;
-	}
-
-	if (obj == NULL)
-	{
-		//del attr
-		int status = PyDict_DelItemString(self->object_attr, name);
-		if (status < 0)
-			PyErr_SetString(PyExc_AttributeError, "attempt to delete non-existent attribute");
-
-		//return status;
-		return NULL;
-	}
-	else
-		return PyDict_SetItemString(self->object_attr, name, obj);
-}
-*/
-
 
 static PyTypeObject pyIMAPI2FS_type = {
 	/* The ob_type field must be initialized in the module init function
 	* to be portable to Windows without using C++. */
 	//PyVarObject_HEAD_INIT(NULL, 0)
 	PyObject_HEAD_INIT(NULL)
-	0,//obj_size
-	filesystem_type_name"."module_name,
-	//"pyIMAPI2FS.FileSystem",             /*tp_name*/
-	sizeof(imapi2fs_object),          /*tp_basicsize*/
+	0,							//obj_size
+	filesystem_type_name"."module_name, /*tp_name*/
+	sizeof(imapi2fs_object),    /*tp_basicsize*/
 	0,                          /*tp_itemsize*/
 	/* methods */
 	(destructor)imapi2fs_dealloc, /*tp_dealloc*/
 	(printfunc)imapi2fs_print,    /*tp_print*/
-	0,//(getattrfunc)imapi2fs_getattr, /*tp_getattr - char * version referring to an attr */
-	0,//(setattrfunc)imapi2fs_setattr, /*tp_setattr - char * version */
-	0,                          /*tp_compare*/
-	(reprfunc)imapi2fs_repr,    /*tp_repr*/
-	0,                          /*tp_as_number*/
-	0,                          /*tp_as_sequence*/
-	0,                          /*tp_as_mapping*/
-	0,                          /*tp_hash*/
-	0,                      /*tp_call*/
-	0,                      /*tp_str*/
-	0,                      /*tp_getattro - PyObject * version referring to an attr */
-	0,                      /*tp_setattro - PyObject * version */
-	0,                      /*tp_as_buffer*/
-	Py_TPFLAGS_DEFAULT,     /*tp_flags*/
+	0,							/*tp_getattr - char * version referring to an attr */
+	0,							/*tp_setattr - char * version */
+	0,							/*tp_compare*/
+	(reprfunc)imapi2fs_repr,	/*tp_repr*/
+	0,							/*tp_as_number*/
+	0,							/*tp_as_sequence*/
+	0,							/*tp_as_mapping*/
+	0,							/*tp_hash*/
+	0,							/*tp_call*/
+	0,							/*tp_str*/
+	0,							/*tp_getattro - PyObject * version referring to an attr */
+	0,							/*tp_setattro - PyObject * version */
+	0,							/*tp_as_buffer*/
+	Py_TPFLAGS_DEFAULT,			/*tp_flags*/
 	"pyIMAPI2 File System COM Object built on "__DATE__" at "__TIME__,/*tp_doc*/
 	0,                      /*tp_traverse*/
 	0,                      /*tp_clear*/
@@ -714,4 +940,30 @@ initpyIMAPI(void)
 	//PyObject_Print()
 	//Py_DECREF();
 	//ex1_object = PyObject_New()
+	/*
+	PyRun_SimpleString(	"import platform\n"
+						"print platform.version()");
+	*/
+
+	//if building locally should detect if target machine is pre-win8.1, though still win8 (powershell w/ mount)
+	//and use getversion or always use external (e.g. 7zip)
+
+	//GetVersion()
+	/*
+	//pyd build doesnt seem to find these anywhere (vc for python? add sdk path env vars to distutils extension?)
+	if (!IsWindows8orGreater())
+	{
+		//IsWindows7orGreater()
+		//check reg key for powershell
+		//HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PowerShell\1
+
+		PySys_WriteStdout("Powershell support for Mount-DiskImage is not available. 7z or another external library may be used.");
+
+		external_dll = LoadLibraryA("7za.dll");
+
+		PySys_WriteStdout("Using external minimal 7-zip ISO dll - 7-zip ISO support is LGPL - 7-Zip Copyright (C) 1999-2016 Igor Pavlov.");
+
+		no_mount = 1;
+	}
+	*/
 }
