@@ -8,7 +8,7 @@
 
 // This is an example of an exported function.
 
-CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode)
+CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode) : output_file(NULL)
 {
 	/*MsftRawCDImageCreator *cd_ic = NULL;
 	LPVOID COMptr = NULL;
@@ -47,7 +47,7 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode)
 	fs_type = FsiFileSystemISO9660;
 
 	hr = FileSystem->put_FileSystemsToCreate(fs_type);
-
+	
 	hr = FileSystem->ChooseImageDefaultsForMediaType(IMAPI_MEDIA_TYPE_CDR);
 
 	if(hr != S_OK)
@@ -91,11 +91,16 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode)
 	}
 	else if(!strcmp(mode, "r"))
 	{
+		printf("readonly file\n");
 		grfMode |= STGM_READ;
+
+		printf("Readonly not supported by IMAPI code. Bad code path.");
 	}
 	else if (!strcmp(mode, "w"))
 	{
+		printf("writeonly file");
 		grfMode |= STGM_WRITE;
+		//FileSystem->ImportFileSystem
 	}
 
 	//STGOPTIONS
@@ -108,19 +113,31 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode)
 										NULL, 
 										&output_file);
 	
+//implementing powershell mount of iso for readonly
+
 	//printf("create %s with mode %s had result %d", filename, mode, hr);
+	//FileSystem->IdentifyFileSystemsOnDisc();
+/*	IFileSystemImageResult *isofile = 
+	IFileSystemImage  
+	FileSystem->put_MultisessionInterfaces(image->get_MultisessionInterfaces())
+	//FileSystem->ImportFileSystem();
+	*/
 
 	return;
 }
 
 CpyIMAPIObject::~CpyIMAPIObject()
 {
-	if(root != current_directory)
-		current_directory->Release();
+	if (root != NULL)
+	{
+		if (root != current_directory)
+			current_directory->Release();
 
-	root->Release();
+		root->Release();
+	}
 
-	output_file->Release();
+	if(output_file!=NULL)
+		output_file->Release();
 }
 void CpyIMAPIObject::set_volume_name(char * volumename)
 {
@@ -168,6 +185,15 @@ LONG CpyIMAPIObject::count()
 
 void CpyIMAPIObject::createISO()
 {
+	/*
+	https://msdn.microsoft.com/en-us/library/windows/desktop/aa365646(v=vs.85).aspx
+
+	Remarks
+
+	Currently, IFileSystemImage::CreateResultImage will require disc media access as a result of a previous IFileSystemImage::IdentifyFileSystemsOnDisc method call. To resolve this issue, it is recommended that another IFileSystemImage object be created specifically for the IFileSystemImage::IdentifyFileSystemsOnDisc operation.
+	The resulting stream can be saved as an ISO file if the file system is generated in a single session and has a start address of zero.
+	*/
+
 	IFileSystemImageResult *iso;
 	//instantiate imageresult
 	HRESULT hr = FileSystem->CreateResultImage(&iso);
@@ -192,6 +218,9 @@ void CpyIMAPIObject::createISO()
 void CpyIMAPIObject::close()
 {
 	createISO();
+
+	if(output_file)
+		output_file->Release();
 }
 
 /*
@@ -226,6 +255,7 @@ char* CpyIMAPIObject::add(char *filename)
 		//add tree
 		//printf("add tree\n");
 		current_directory->AddTree(bfilename, TRUE);
+		result = NULL;
 	}
 	else
 	{
@@ -264,7 +294,7 @@ char* CpyIMAPIObject::add(char *filename)
 
 			file_stream->Release();
 			//out->Release();
-			result = "File Added";
+			result = NULL;
 		}
 
 
@@ -423,14 +453,12 @@ char *CpyIMAPIObject::setCWD(char * path)
 			current_directory->Release();
 		}
 		current_directory = dir;
-		result = "changed to directory";
+		result = S_OK;
 	}
 	else
 	{
 		//throw python exception!
 	}
-
-	//printf("%s\n", result);
 
 	if (free_path)
 		delete[]path;
@@ -531,17 +559,131 @@ void CpyIMAPIObject::freelist(char **list)
 
 	delete[] list;
 }
-void CpyIMAPIObject::remove(char *filename)
+int CpyIMAPIObject::remove(char *filename)
 {
 	BSTR bfilename = _com_util::ConvertStringToBSTR(filename);
 
-	current_directory->Remove(bfilename);
+	HRESULT hr = current_directory->Remove(bfilename);
 
 	SysFreeString(bfilename);
+
+	if (hr == S_OK)
+		return 1;
+	
+	return 0;
 }
 
 //should create struct or ** of dict entries
 void *CpyIMAPIObject::next()
 {
 	return NULL;
+}
+
+int CpyIMAPIObject::extract(char *filename, char *dest_system_path)
+{
+	int result = FALSE;
+	wchar_t wpath[512];
+
+	wchar_t wfilename[256];
+	size_t size;
+	::mbstowcs_s(&size, wfilename, filename, 256);
+
+	if (dest_system_path == NULL)
+	{
+		GetCurrentDirectoryW(512, wpath);
+	}
+	else
+	{
+		printf("using provided path\n");
+		size_t size;
+		::mbstowcs_s(&size, wpath, dest_system_path, 512);
+	}
+
+	wsprintf(wpath, L"%s\\%s", wpath, wfilename);
+	wprintf(L"%s\n", wpath);
+
+	DWORD grfMode = STGM_SHARE_DENY_WRITE;
+	bool create = FALSE;
+
+	char *mode = "a";
+
+	if (!strcmp(mode, "a"))
+	{
+		//'a' from python Tarfile docs
+		/*
+		Open for appending with no compression. The file is created if it does not exist.
+		*/
+		grfMode |= STGM_READWRITE | STGM_CREATE;
+		create = TRUE;
+	}
+	else if (!strcmp(mode, "r"))
+	{
+		grfMode |= STGM_READ;
+	}
+	else if (!strcmp(mode, "w"))
+	{
+		grfMode |= STGM_WRITE;
+	}
+
+	HRESULT hr = SHCreateStreamOnFileEx(wpath,
+		grfMode,
+		FILE_ATTRIBUTE_NORMAL,
+		create,
+		NULL,
+		&output_file);
+
+	printf("opened output file with result %d\n", hr);
+	if (output_file != NULL)
+	{
+		printf("getting iso item\n");
+		BSTR bpath = _com_util::ConvertStringToBSTR(filename);
+		IFsiItem *item = NULL;
+
+		hr = current_directory->get_Item(bpath, &item);
+		
+		if (item != NULL)
+		{
+			printf("getting iso file item\n");
+
+			//IFsiDirectoryItem *dir = NULL;
+			//item->QueryInterface(__uuidof(IFsiDirectoryItem), (void**)&dir);
+
+			IFsiFileItem *file = NULL;
+			item->QueryInterface(__uuidof(IFsiFileItem), (void**)&file);
+
+			if (file != NULL)
+			{
+
+				printf("getting data stream\n");
+
+				IStream *data = NULL;
+				file->get_Data(&data);
+				
+				if (data != NULL)
+				{
+					printf("copying data stream to system\n");
+					STATSTG data_stat;
+
+					data->Stat(&data_stat, FALSE);
+					printf("filesize %d\n", data_stat.cbSize);
+					HRESULT hr = data->CopyTo(output_file, data_stat.cbSize, NULL, NULL);
+
+					printf("copyto result %d\n", hr);
+
+					data->Release();
+					file->Release();
+					
+					result = TRUE;
+				}
+
+			}
+
+			item->Release();
+		}
+
+		output_file->Release();
+		SysFreeString(bpath);
+	}
+	
+	return result;
 }

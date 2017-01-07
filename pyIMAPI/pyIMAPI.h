@@ -25,8 +25,8 @@ extern "C"
 	PYIMAPI_API char **flist(void *obj);
 	PYIMAPI_API void ffreelist(void *obj, char **paths);
 	PYIMAPI_API char *fadd(void *obj, char *filename);
-	PYIMAPI_API void fremove(void *obj, char *filename);
-
+	PYIMAPI_API int fremove(void *obj, char *filename);
+	PYIMAPI_API int fextract(void *obj, char *isofile_member, char *dest_system_path);
 #ifndef LONG
 //try to match VS LONG #define to the likely type
 	PYIMAPI_API long fcount(void *);
@@ -69,7 +69,9 @@ public:
 	void		createISO();
 	LONG		count();
 	void		close();
-	void		remove(char *filename);
+	int			remove(char *filename);
+
+	int			extract(char *filename, char *dest_system_path);
 
 	//return IsoInfo object
 	void*		next();
