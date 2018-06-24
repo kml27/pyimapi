@@ -14,7 +14,7 @@
 extern "C"
 {
 #endif
-	PYIMAPI_API void *fcreateIMAPI2FS(char *filename, char *mode);
+	PYIMAPI_API void *fcreateIMAPI2FS(char *filename, char *mode, char *disk_type);
 	PYIMAPI_API void fdeleteIMAPI2FS(void *);
 	PYIMAPI_API char *fgetcwd(void *obj);
 	PYIMAPI_API void ffreecwd(char *cwd);
@@ -26,7 +26,8 @@ extern "C"
 	PYIMAPI_API void ffreelist(void *obj, char **paths);
 	PYIMAPI_API char *fadd(void *obj, char *filename);
 	PYIMAPI_API int fremove(void *obj, char *filename);
-	PYIMAPI_API int fextract(void *obj, char *isofile_member, char *dest_system_path);
+	//extract is handled by reading layer (powershell or 7zip, iso isnt written till file close)
+	//PYIMAPI_API int fextract(void *obj, char *isofile_member, char *dest_system_path);
 #ifndef LONG
 //try to match VS LONG #define to the likely type
 	PYIMAPI_API long fcount(void *);
@@ -52,8 +53,10 @@ class  CpyIMAPIObject
 
 	IStream*	output_file;
 
+	IMAPI_MEDIA_PHYSICAL_TYPE imapi_disk_type;
+
 public:
-	CpyIMAPIObject(char *filename, char *mode);
+	CpyIMAPIObject(char *filename, char *mode, char *disk_type);
 	~CpyIMAPIObject(void);
 	// TODO: add your methods here.
 	void		set_volume_name(char* volumename);

@@ -1,13 +1,16 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25420.1
+# Visual Studio 15
+VisualStudioVersion = 15.0.27004.2009
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pyIMAPI2FSutil", "pyIMAPI.vcxproj", "{0F9BB5A4-3FFA-430A-9098-7465B59F6163}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Standalone", "Standalone\Standalone.vcxproj", "{A4EEA049-85B5-4DC4-BC94-318D868FE3B2}"
+	ProjectSection(ProjectDependencies) = postProject
+		{1E58FD7B-4ACE-41A8-B744-A3FBB1CE3DAE} = {1E58FD7B-4ACE-41A8-B744-A3FBB1CE3DAE}
+	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pyIMAPI2FS_Module", "pyIMAPI2FS.vcxproj", "{1E58FD7B-4ACE-41A8-B744-A3FBB1CE3DAE}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pyIMAPI2FS", "..\pyIMAPI2FS\pyIMAPI2FS.vcxproj", "{1E58FD7B-4ACE-41A8-B744-A3FBB1CE3DAE}"
 	ProjectSection(ProjectDependencies) = postProject
 		{0F9BB5A4-3FFA-430A-9098-7465B59F6163} = {0F9BB5A4-3FFA-430A-9098-7465B59F6163}
 	EndProjectSection
@@ -47,5 +50,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4E4FC88D-B145-4D14-87DB-CCD94B0DD4F8}
 	EndGlobalSection
 EndGlobal

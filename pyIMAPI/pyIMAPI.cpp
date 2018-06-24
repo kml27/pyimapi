@@ -8,7 +8,7 @@
 
 // This is an example of an exported function.
 
-CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode) : output_file(NULL)
+CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode, char *disk_type) : output_file(NULL)
 {
 	/*MsftRawCDImageCreator *cd_ic = NULL;
 	LPVOID COMptr = NULL;
@@ -36,6 +36,11 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode) : output_file(NULL)
 	//printf("%s\n", cwd);
 	//delete[] cwd;
 
+	if (!::_strcmpi(mode, "r"))
+	{
+		//Read Only not supported by IMAPI
+		return;
+	}
 	//hr = CLSIDFromProgID(OLESTR("IMAPI2FS.MsftFileSystemImage"), &FSI_CLSID);
 	//printf("cocreateinstance");
 	hr = CoCreateInstance(FSI_CLSID, NULL, CLSCTX_INPROC_SERVER, FSI_IID, (void **)&FileSystem);
@@ -44,19 +49,61 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode) : output_file(NULL)
 	//types specified in imapi2.h enum _IMAPI_MEDIA_PHYSICAL_TYPE
 	//_IMAPI_MEDIA_PHYSICAL_TYPE
 	
+	/*IDiscFormat2::get_SupportedMediaTypes*/
+
 	fs_type = FsiFileSystemISO9660;
+	
+	/*
+	struct type_map{
+		type_map(char *sz_in, int type_in) : sz(sz_in), type(type_in) {}
+		char *sz;
+		int type;
+	} 
+	*/
+	char *sz_disk_types[] = {
+		"CD",
+		"DVD",
+		"DVDDL",
+		//HDDVD is failing to create, need to investigate
+		//"HDDVD",
+		"BluRay",
+	};
+
+	_IMAPI_MEDIA_PHYSICAL_TYPE imapi_disk_types[] = {
+		IMAPI_MEDIA_TYPE_CDR,
+		IMAPI_MEDIA_TYPE_DVDPLUSR,
+		IMAPI_MEDIA_TYPE_DVDPLUSR_DUALLAYER,
+		//IMAPI_MEDIA_TYPE_HDDVDR,
+		IMAPI_MEDIA_TYPE_BDR,
+	};
+
+	//default to most restrictive for now, can increase it in later releases and not break anything
+	imapi_disk_type = IMAPI_MEDIA_TYPE_CDR;
+	
+	int j = sizeof(sz_disk_types)/sizeof(char *);
+
+	for (int i = 0; i < j; i++)
+	{
+		if (::_strcmpi(disk_type, sz_disk_types[i]) == 0)
+		{
+			imapi_disk_type = imapi_disk_types[i];
+		}
+	}
 
 	hr = FileSystem->put_FileSystemsToCreate(fs_type);
 	
-	hr = FileSystem->ChooseImageDefaultsForMediaType(IMAPI_MEDIA_TYPE_CDR);
+	hr = FileSystem->ChooseImageDefaultsForMediaType(imapi_disk_type);
 
 	if(hr != S_OK)
 	{
 		if (hr == IMAPI_E_INVALID_PARAM)
+		{
 			printf("invalid parameter\n");
+		}
 		else if (hr == IMAPI_E_IMAGE_TOO_BIG)
+		{
 			printf("FreeMediaBlocks property is too small for estimated image size\n");
-
+		}
 		//release cocreateinstanced instance
 		
 		//assert(false);
@@ -80,7 +127,7 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode) : output_file(NULL)
 	DWORD grfMode = STGM_SHARE_DENY_WRITE;
 	bool create = FALSE;
 
-	if (!strcmp(mode, "a"))
+	if (!::_strcmpi(mode, "a"))
 	{
 		//'a' from python Tarfile docs
 		/*
@@ -89,17 +136,17 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode) : output_file(NULL)
 		grfMode |= STGM_READWRITE | STGM_CREATE;
 		create = TRUE;
 	}
-	else if(!strcmp(mode, "r"))
+	else if(!::_strcmpi(mode, "r"))
 	{
 		printf("readonly file\n");
 		grfMode |= STGM_READ;
 
 		printf("Readonly not supported by IMAPI code. Bad code path.");
 	}
-	else if (!strcmp(mode, "w"))
+	else if (!::_strcmpi(mode, "w"))
 	{
 		printf("writeonly file");
-		grfMode |= STGM_WRITE;
+		grfMode |= STGM_WRITE | STGM_CREATE;
 		//FileSystem->ImportFileSystem
 	}
 
@@ -172,8 +219,16 @@ LONG CpyIMAPIObject::count()
 {
 	LONG count=0;
 	
-	HRESULT hr = current_directory->get_Count(&count);
-
+	if (current_directory)
+	{
+		HRESULT hr = current_directory->get_Count(&count);
+	}
+	else
+	{
+#ifdef _DEBUG
+		printf("error: current_directory object does not exists");
+#endif
+	}
 	//FileSystem->get_FileCount(&count);
 
 	//current_directory->get__NewEnum();
@@ -194,6 +249,9 @@ void CpyIMAPIObject::createISO()
 	The resulting stream can be saved as an ISO file if the file system is generated in a single session and has a start address of zero.
 	*/
 
+	if (!FileSystem)
+		return;
+
 	IFileSystemImageResult *iso;
 	//instantiate imageresult
 	HRESULT hr = FileSystem->CreateResultImage(&iso);
@@ -205,14 +263,21 @@ void CpyIMAPIObject::createISO()
 	offset.LowPart = 0;
 	offset.HighPart = 0;
 
-	output_file->Seek(offset, STREAM_SEEK_SET, NULL);
-	
-	STATSTG isostat;
-	isostream->Stat(&isostat, FALSE);
+	if (output_file) {
+		output_file->Seek(offset, STREAM_SEEK_SET, NULL);
 
-	isostream->CopyTo(output_file, isostat.cbSize, NULL, NULL);
-	isostream->Release();
-	
+		STATSTG isostat;
+		isostream->Stat(&isostat, FALSE);
+
+		isostream->CopyTo(output_file, isostat.cbSize, NULL, NULL);
+		isostream->Release();
+	}
+	else
+	{
+#ifdef _DEBUG
+		printf("error: no output file was created, cannot write iso\n");
+#endif
+	}
 }
 
 void CpyIMAPIObject::close()
@@ -352,26 +417,30 @@ char *CpyIMAPIObject::getCWD()
 
 	//directory stash files are built in
 	//FileSystem->get_WorkingDirectory(&bpath);
-	int len = (SysStringLen(bpath) + 1);//*2;
+	int len = SysStringLen(bpath);//*2;
 	
 	//if more than null terminated str
-	if (len > 1)
+	if (len > 0)
 	{
 		//printf("%d\n", len);
 		//allocated with new []
-		path = _com_util::ConvertBSTRToString(bpath);
+		char *original = _com_util::ConvertBSTRToString(bpath);
+		path = new char[len + 3];
+		strcpy_s(path, len + 3, original);
+		delete[] original;
 	}
 	else if (current_directory == root)
 	{
 		//these strs will always be freed with delete[], provide a new[] str for that purpose
 		//printf("root");
 		path = new char[3];
-		strcpy_s(path, 3, "\\");
 	}
 	else
 	{
 		printf("no dir");
 	}
+	
+	strcpy_s(&path[len], 3, "\\");
 
 	return path;
 }
@@ -499,13 +568,55 @@ char *CpyIMAPIObject::mkdir(char *path)
 	dir->Release();
 	//printf("released directory item\n");
 	SysFreeString(bpath);
+
+	/*
+	Return code	Description
+E_POINTER
+Pointer is not valid.
+
+Value: 0x80004003
+
+IMAPI_E_INVALID_PARAM
+The value specified for parameter %1!ls! is not valid.
+
+Value: 0xC0AAB101
+
+E_OUTOFMEMORY
+Failed to allocate the required memory.
+
+Value: 0x8007000E
+	*/
+
+	char *result_path = path;
+
+	switch (hr) {
+		case E_POINTER:
+			result_path = "";
+			break;
+
+		case IMAPI_E_INVALID_PARAM:
+			result_path = "";
+			break;
+	
+		case E_OUTOFMEMORY:
+			result_path = "";
+			break;
+
+		case S_OK:
+			break;
+		default:
+			result_path = "";
+			break;
+
+	}
+	
+
 	//printf("freed bstr\n");
-	return "nochk";
+	return path;
 }
 
 bool CpyIMAPIObject::exists(char * filename)
 {
-	IFsiItem *file;
 	
 	char fullpath[512];
 
@@ -513,7 +624,9 @@ bool CpyIMAPIObject::exists(char * filename)
 	char *cwd = getCWD();
 	//printf("after getcwd\n");
 
-	sprintf_s(fullpath, 512, "%s\\%s", cwd, filename);
+
+
+	sprintf_s(fullpath, 512, "%s%s", cwd, filename);
 	//printf("after sprintf\n");
 	delete []cwd;
 	//path
@@ -522,24 +635,31 @@ bool CpyIMAPIObject::exists(char * filename)
 	
 	FsiItemType type;
 
+	//following seems to work for file
 	FileSystem->Exists(bfullpath, &type);
 
-	current_directory->get_Item(bfilename, &file);
+	//IFsiItem *file;
+	//not sure why this was here?
+	//current_directory->get_Item(bfilename, &file);
+
+	bool item_exists = false;//file != NULL;
 
 	switch (type)
 	{
 		case FsiItemNotFound:
+			
 			break;
+
 		case FsiItemDirectory:
-			break;
 		case FsiItemFile:
+			item_exists = true;
 			break;
 	}
 
-	bool item_exists = file != NULL;
 	
-	if (item_exists)
+/*	if (item_exists)
 		file->Release();
+		*/
 
 	SysFreeString(bfilename);
 	SysFreeString(bfullpath);
@@ -562,6 +682,10 @@ void CpyIMAPIObject::freelist(char **list)
 int CpyIMAPIObject::remove(char *filename)
 {
 	BSTR bfilename = _com_util::ConvertStringToBSTR(filename);
+	 
+	//is a check for directory and RemoveTree required? IMAPI_E_DIR_NOT_EMPTY
+
+	//IMAPI_E_ITEM_NOT_FOUND
 
 	HRESULT hr = current_directory->Remove(bfilename);
 
@@ -665,7 +789,7 @@ int CpyIMAPIObject::extract(char *filename, char *dest_system_path)
 					STATSTG data_stat;
 
 					data->Stat(&data_stat, FALSE);
-					printf("filesize %d\n", data_stat.cbSize);
+					printf("filesize %I64u\n", *(unsigned __int64 *) &data_stat.cbSize);
 					HRESULT hr = data->CopyTo(output_file, data_stat.cbSize, NULL, NULL);
 
 					printf("copyto result %d\n", hr);
