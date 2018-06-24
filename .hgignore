@@ -1,5 +1,4 @@
 syntax: glob
-
 *.obj
 *.dll
 *.lib
@@ -19,6 +18,4 @@ syntax: glob
 *.exp
 *.ilk
 *.idb
-
-syntax: regex
 pyIMAPI.egg-info

@@ -68,6 +68,7 @@ typedef struct {
 		char			drive[2];
 		char			path[MAX_PATH];
 		int				open;
+		PyObject		*disk_type;
 } imapi2fs_object;
 
 static imapi2fs_object *get_imapi2fs(PyObject *self)
@@ -535,6 +536,16 @@ static PyObject *imapi2fs_remove(PyObject *self, PyObject *args)
 		Py_RETURN_FALSE;
 
 }
+
+
+static PyObject *imapi2fs_getdisktype(PyObject *self, PyObject *noarg)
+{
+	imapi2fs_object *obj = get_imapi2fs(self);
+
+	return obj->disk_type;
+
+}
+
 //methods array with which to set tp_methods struct member
 static PyMethodDef FileSystem_methods[] =	{	//name, function, args (METH_NOARGS, METH_VARARGS, METH_VARARGS|METH_KEYWORDS), description
 												{"add", (PyCFunction)imapi2fs_add,  METH_VARARGS, PyDoc_STR("add a file to the ISO filesystem") },
@@ -546,6 +557,7 @@ static PyMethodDef FileSystem_methods[] =	{	//name, function, args (METH_NOARGS,
 												{"exists", (PyCFunction)imapi2fs_exists, METH_VARARGS, PyDoc_STR("check if the specified file exists in the ISO filesystem")},
 												{"close", (PyCFunction)imapi2fs_close, METH_NOARGS, PyDoc_STR("close this ISO filesystem")},
 												{"remove", (PyCFunction)imapi2fs_remove, METH_VARARGS, PyDoc_STR("remove the specified file from the ISO filesystem")},
+												{"getdisktype", (PyCFunction)imapi2fs_getdisktype, METH_NOARGS, PyDoc_STR("Return the string representation of specified physical media type")},
 												{NULL}//, NULL }//SENTINEL *ml_name must be NULL 
 											};
 
@@ -602,7 +614,7 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 
 	objType type = imapi;
 
-	char *disk_type = "BluRay";
+	char *disk_type = "CD";
 
 	char *mount_drive = "z:\\";
 
@@ -705,6 +717,8 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 	memcpy(obj->filename, filename, strlen(filename)+1);
 	
 	str = PyString_FromString(filename);
+
+	obj->disk_type = PyString_FromString(disk_type);
 
 	//inc ref pyobjects
 	obj->filename_str = str;

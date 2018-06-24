@@ -67,8 +67,10 @@ site_path = [path for path in site.getsitepackages() if "site-packages" in path]
 
 #name is the name of the package to pip and distutils
 setup(name=module_name,
-      data_files=[(site_path+"\\", ["pyIMAPI2FS-dll\\"+arch+"\\pyIMAPI2FSutil.dll"])],
-      version="0.1.0a17",
+      #adding site_path fixes local pip install ./pyIMAPI data dir but breaks distro with wheel/twine
+      #just build with python setup.py sdist bdist_wheel and pip install dist\<wheel package or sdist> to test
+      data_files=[("\\", ["pyIMAPI2FS-dll\\"+arch+"\\pyIMAPI2FSutil.dll"])],
+      version="0.3.0a1",
       author="Kenneth Long",
       author_email="kennethlong@acm.org",
       url="http://bitbucket.org/ken_long/pyIMAPI2FS/",
