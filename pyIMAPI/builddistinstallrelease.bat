@@ -17,9 +17,9 @@ copy /y x64\Release\pyIMAPI2FSutil.pdb pyIMAPI2FS-dll\x64
 
 mkdir pyIMAPI2FS-dll\x86
 REM copy /y nul pyIMAPI2FS-dll\x86\__init__.py
-copy /y win32\Release\pyIMAPI2FSutil.dll pyIMAPI2FS-dll\x86
-copy /y win32\Release\pyIMAPI2FSutil.lib pyIMAPI2FS-dll\x86
-copy /y win32\Release\pyIMAPI2FSutil.pdb pyIMAPI2FS-dll\x86
+copy /y Release\pyIMAPI2FSutil.dll pyIMAPI2FS-dll\x86
+copy /y Release\pyIMAPI2FSutil.lib pyIMAPI2FS-dll\x86
+copy /y Release\pyIMAPI2FSutil.pdb pyIMAPI2FS-dll\x86
 
 python setup.py sdist
-pip install --upgrade ./dist/pyIMAPI-0.1.0a11.tar.gz
+pip install --upgrade ./dist/pyIMAPI-0.1.0a17.tar.gz

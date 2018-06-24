@@ -1,0 +1,24 @@
+syntax: glob
+
+*.obj
+*.dll
+*.lib
+*.pdb
+*.tlog
+*.db
+*.pch
+*.suo
+*.opendb
+*.db-shm
+*.db-wal
+*.ipch
+*.exe
+*.iobj
+*.ipdb
+*.log
+*.exp
+*.ilk
+*.idb
+
+syntax: regex
+pyIMAPI.egg-info

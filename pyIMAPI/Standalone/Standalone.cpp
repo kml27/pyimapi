@@ -6,6 +6,8 @@
 #include "shlwapi.h"
 #include "../pyIMAPI.h"
 
+#include <assert.h>
+
 #define MAX_LOADSTRING 100
 
 // Global Variables:
@@ -27,23 +29,90 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
-    // TODO: Place code here.
-	void *obj = fcreateIMAPI2FS("testiso", "a");
-	char*r = fmkdir(obj, "test");
-	char *test = fgetcwd(obj);
-	r = fchdir(obj, "test");
-	test = fgetcwd(obj);
-	char*s = fadd(obj, "test");
-	long n = fcount(obj);
-	int e = fexists(obj, "test");
-	char **list = flist(obj);
-	ffreelist(obj, list);
-	fremove(obj, "test");
-	e = fexists(obj, "test");
-	list = flist(obj);
-	ffreelist(obj, list);
-	fcloseImage(obj);
+	CloseHandle(CreateFile(L"exists_test", GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL));
 
+	char *disk_types[] = {
+		"CD",
+		"DVD",
+		//"HDDVD",
+		"DVDDL",
+		"BluRay",
+		"NA",
+	};
+
+    // TODO: Place code here.
+	//test read non-existent iso
+	
+	for (int i = 0; i < sizeof(disk_types)/sizeof(char *); i++)
+	{
+
+		char *cur_disk_type = disk_types[i];
+
+		void *obj = fcreateIMAPI2FS("testiso", "r", cur_disk_type);
+
+		fcloseImage(obj);
+
+		obj = fcreateIMAPI2FS("testiso", "w", cur_disk_type);
+		char*r = fmkdir(obj, "test");
+
+		long n = fcount(obj);
+		assert(n == 1);
+
+		char *test = fgetcwd(obj);
+
+		assert(::strcmp(test, "\\") == 0);
+
+		int e = fexists(obj, "test");
+		assert(e == 1);
+
+		r = fchdir(obj, "test");
+		test = fgetcwd(obj);
+
+		assert(::_strcmpi(test, "\\test\\") == 0);
+
+		n = fcount(obj);
+
+		assert(n == 0);
+
+		e = fexists(obj, "test");
+		assert(e == 0);
+
+		char*s = fadd(obj, "dne_test");
+
+		n = fcount(obj);
+		assert(n == 0);
+
+		e = fexists(obj, "dne_test");
+		assert(e == 0);
+
+		fremove(obj, "dne_test");
+
+		s = fadd(obj, "exists_test");
+
+		n = fcount(obj);
+		assert(n == 1);
+
+		e = fexists(obj, "exists_test");
+		assert(n == 1);
+
+
+		char **list = flist(obj);
+		ffreelist(obj, list);
+		fremove(obj, "exists_test");
+		e = fexists(obj, "exists_test");
+		list = flist(obj);
+		ffreelist(obj, list);
+		fcloseImage(obj);
+
+		obj = fcreateIMAPI2FS("testiso", "r", cur_disk_type);
+		
+		//fextract
+
+		fcloseImage(obj);
+
+	}
+
+	return S_OK;
 
     // Initialize global strings
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);

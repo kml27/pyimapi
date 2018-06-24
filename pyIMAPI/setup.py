@@ -1,7 +1,11 @@
+from __future__ import print_function
+
 print("beginning setup.py, pip calls copytree and any open files not opened with shared read might interrupt this process, if this solution is open in visual studio, this will be the case")
 import os
 import sys
 import platform
+
+import site
 
 platform_string = " ".join(platform.uname()).lower()
 module_name="pyIMAPI"
@@ -28,7 +32,7 @@ print("info: Building from C")
 arch = ""
 if "linux" in platform_string:
    
-    print platform_string
+    print(platform_string)
     
     ext_modules = [Extension(module_name,
                         ext_files,
@@ -59,9 +63,11 @@ requirements = []
 if sys.version_info[0] < 3 and sys.version_info[1] < 7:
 	requirements.append('importlib')
 
+site_path = [path for path in site.getsitepackages() if "site-packages" in path][0]
+
 #name is the name of the package to pip and distutils
 setup(name=module_name,
-      data_files=[("\\", ["pyIMAPI2FS-dll\\"+arch+"\\pyIMAPI2FSutil.dll"])],
+      data_files=[(site_path+"\\", ["pyIMAPI2FS-dll\\"+arch+"\\pyIMAPI2FSutil.dll"])],
       version="0.1.0a17",
       author="Kenneth Long",
       author_email="kennethlong@acm.org",

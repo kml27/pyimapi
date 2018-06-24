@@ -3,8 +3,11 @@
 //IMAPI2 File System Python Module
 
 #include <windows.h>
+#include <Shlwapi.h>
 #include <Python.h>
 #include "pyIMAPI.h"
+
+#pragma comment(lib, "shlwapi.lib")
 
 #define error_name						"IMAPI2Error"
 #define module_name						"pyIMAPI"
@@ -353,31 +356,52 @@ static PyObject *imapi2fs_extract(PyObject *self, PyObject *args, PyObject *keyw
 	char *isofile_member = "";
 	char *system_path = "";
 
+	char copy_file[MAX_CLL];
+
 	if (obj == NULL)
+	{
 		Py_RETURN_NONE;
+	}
 
 	if (!PyArg_ParseTupleAndKeywords(args, keywds, "s|s:keywords", kwlist, &isofile_member, &system_path))
+	{
 		return NULL;
-	
-	printf("%s %s\n", isofile_member, system_path);
+	}
+
+	//printf("%s %s\n", isofile_member, system_path);
+
+	//if a system path was supplied, but does not exist
+
+	/*if (system_path && !PathFileExistsA(system_path))
+	{
+		CreateDirectoryA(system_path, NULL);
+	}*/
 
 	switch (obj->type)
 	{
 		case imapi:
 		{
-			if (!strcmp(system_path, ""))
-				system_path = NULL;
-
-			//get filesystem item from iso
-			if (!fextract(obj->IMAPI2FS_Object, isofile_member, system_path))
-				Py_RETURN_FALSE;
-
+			PySys_WriteStdout("Mounted filesystem is write-only, cannot read image\n");
+			Py_RETURN_FALSE;
 			break;
 		}
 
 		case mount:
 		{
-			printf("mounted image extraction\n");
+			if (!strcmp(system_path, ""))
+			{
+				system_path = ".";
+			}
+
+			//if (!fextract(obj->IMAPI2FS_Object, isofile_member, system_path))
+			//	Py_RETURN_FALSE;
+
+			sprintf_s(copy_file, MAX_CLL, "copy \"%s:\\%s\" \"%s\" > nul", obj->drive, isofile_member, system_path);
+
+			//printf("%s\n", copy_file);
+
+			system(copy_file);
+
 			break;
 		}
 
@@ -574,9 +598,11 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 	imapi2fs_object *obj = NULL;
 	PyObject *str = NULL;
 
-	static char *kwlist[] = {"filename", "mode", NULL};
+	static char *kwlist[] = {"filename", "mode", "disk_type", NULL};
 
 	objType type = imapi;
+
+	char *disk_type = "BluRay";
 
 	char *mount_drive = "z:\\";
 
@@ -590,7 +616,7 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 	//:open
 	//:new_noddy
 	/*args should be filename and file open mode*/
-	if (!PyArg_ParseTupleAndKeywords(args, keywds, "|ss:keywords", kwlist, &filename, &mode))
+	if (!PyArg_ParseTupleAndKeywords(args, keywds, "|sss:keywords", kwlist, &filename, &mode, &disk_type))
 	{
 		return NULL;
 	}
@@ -600,7 +626,7 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 	if (!strcmp(mode, "a") || !strcmp(mode, "w"))
 	{
 		//printf("about to create internal object");
-		fsi = fcreateIMAPI2FS(filename, mode);
+		fsi = fcreateIMAPI2FS(filename, mode, disk_type);
 		//printf("%d", type);
 		//printf("self is %p\n", self);
 	}
@@ -616,35 +642,43 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 		filename = fullpath;
 		//printf("%s", filename);
 
-		sprintf_s(command, MAX_CLL, "powershell -Command \"Mount-DiskImage -Image \"%s\"\"", filename);
-		//printf("%s : %s",command);
-		
-		//ShellExecute(NULL, NULL, "powershell", mount_ps, NULL, )
-		system(command);
+//CHECK FOR fileexists here for (better?) robustness
+		if (PathFileExistsA(filename)) {
 
-		sprintf_s(command, MAX_CLL, "powershell -Command \"Get-DiskImage -ImagePath \"%s\" | Get-Volume | Select -ExpandProperty DriveLetter\" > newdrive", filename);
-		
-		//could also use DevicePath for more robust handling when implementing wcs/unicode
-		//powershell -Command "Get-DiskImage -ImagePath "c:\development\pyimapi2\pyimapi\default.iso" | Select -ExpandProperty DevicePath"
+			sprintf_s(command, MAX_CLL, "powershell -Command \"Mount-DiskImage -Image \"%s\"\"", filename);
+			//printf("%s : %s",command);
 
-		//printf("%s\n", command);
+			//ShellExecute(NULL, NULL, "powershell", mount_ps, NULL, )
+			system(command);
 
-		system(command);
+			sprintf_s(command, MAX_CLL, "powershell -Command \"Get-DiskImage -ImagePath \"%s\" | Get-Volume | Select -ExpandProperty DriveLetter\" > newdrive", filename);
 
-		//multiple instances cannot be run from the same working directory in this case
-		//update this to use process id to make id unique
-		fopen_s(&newdrive, "newdrive", "r");
-		
-		//very specific to single drive letter drives... rather than ole/wmi object path...
-		//should replace this... esp for unicode systems in languages besides en-us
-		fread(drive, 3, 1, newdrive);
-		//printf("%s\n", drive);
-		fclose(newdrive);
-		//remove("newdrive");
-		
-		//null terminate string
-		drive[1] = '\0';
-		//printf("%s\n", drive);
+			//could also use DevicePath for more robust handling when implementing wcs/unicode
+			//powershell -Command "Get-DiskImage -ImagePath "c:\development\pyimapi2\pyimapi\default.iso" | Select -ExpandProperty DevicePath"
+
+			//printf("%s\n", command);
+
+			system(command);
+
+			//multiple instances cannot be run from the same working directory in this case
+			//update this to use process id to make id unique
+			fopen_s(&newdrive, "newdrive", "r");
+
+			//very specific to single drive letter drives... rather than ole/wmi object path...
+			//should replace this... esp for unicode systems in languages besides en-us
+			fread(drive, 3, 1, newdrive);
+			//printf("%s\n", drive);
+			fclose(newdrive);
+			//remove("newdrive");
+
+			//null terminate string
+			drive[1] = '\0';
+			//printf("%s\n", drive);
+		}
+		else
+		{
+			PySys_WriteStdout("ISO File not found");
+		}
 	}
 
 	//when using tp_obj->tp_free with pyobject_new there is no crash when calling help(pyIMAPI2FS)
@@ -702,7 +736,7 @@ static PyObject *imapi2fs_isFileSystem(PyObject *self, PyObject *args)
 
 static PyMethodDef IMAPI2FS_methods[] = {
 	//python function name, actual/export function name, calling convention (METH_VARARGS, METH_NOARGS, or METH_VARARGS|METH_KEYWORDS or rarely old obsolete 0)
-	{ "open", (PyCFunction)imapi2fs_open, METH_KEYWORDS, "Create or open a new IMAPI2 FileSystem object with the optionally provided filename ('<time>') and stdlib open mode ('a+')" },
+	{ "open", (PyCFunction)imapi2fs_open, METH_KEYWORDS, "Create or open a new IMAPI2 FileSystem object with the optionally provided filename ('<time>'), stdlib open mode ('w'), and disk_type (\"CD\", \"DVD\", \"HDDVD\", \"DVDDL\",\"BluRay\")" },
 	{ "is_FileSystem", imapi2fs_isFileSystem, METH_VARARGS, "Return true if name is an "module_name".FileSystem that this module can " },
 	//NULL termination block (SENTINEL)
 	//{ NULL, NULL, 0, NULL }
@@ -949,7 +983,8 @@ initpyIMAPI(void)
 	//and use getversion or always use external (e.g. 7zip)
 
 	//GetVersion()
-	/*
+	
+#ifdef IsWindows8orGreater
 	//pyd build doesnt seem to find these anywhere (vc for python? add sdk path env vars to distutils extension?)
 	if (!IsWindows8orGreater())
 	{
@@ -961,9 +996,11 @@ initpyIMAPI(void)
 
 		external_dll = LoadLibraryA("7za.dll");
 
-		PySys_WriteStdout("Using external minimal 7-zip ISO dll - 7-zip ISO support is LGPL - 7-Zip Copyright (C) 1999-2016 Igor Pavlov.");
+		PySys_WriteStdout("Using external minimal 7-zip ISO dll - 7-zip ISO support is LGPL - 7-Zip Copyright (C) 1999-2016 Igor Pavlov. 7-Zip Source can be obtained from www.7-zip.org");
 
 		no_mount = 1;
 	}
-	*/
+#endif
+
+
 }
