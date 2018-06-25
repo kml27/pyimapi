@@ -15,8 +15,17 @@
 
 #define filesystem_type_name			"FileSystem"
 
+#if PY_MAJOR_VERSION == 2
 staticforward PyTypeObject pyIMAPI2FS_type;
+#endif
+#if PY_MAJOR_VERSION >= 3
+//https://docs.python.org/3/howto/cporting.html
+static PyTypeObject pyIMAPI2FS_type;
 
+#define PyString_FromString(x)		PyUnicode_FromString(x)
+#define PyString_FromFormat(x, ...) PyUnicode_FromFormat(x, __VA_ARGS__)
+
+#endif
 PyDoc_STRVAR(module_doc, "Windows IMAPI2 File System Python Module\n\
 				"filesystem_type_name":\t\tan IMAPI2 FileSystem, do not use this type directly, use "module_name".open() instead\n\
 				"error_name":\t\ta catch all exception for any errors\n");
@@ -33,8 +42,28 @@ AudioCD:	an IMAPI2 Raw Format DiscAtOnce compatible object\n\
 #define audiocd_filesystem_type_name	"AudioCD"
 */
 
+/*#if PY_MAJOR_VER == 2
 static PyObject *imapi2fs;
 static PyObject *imapi2fs_error;
+#endif
+*/
+
+struct module_state {
+	PyObject *imapi2fs;
+	PyObject *imapi2fs_error;
+	//???
+	//hows it handled in py3
+	//imapi2fs_type?
+};
+
+#if PY_MAJOR_VERSION >= 3
+#define GETSTATE(m) ((struct module_state*)PyModule_GetState(m))
+#else
+static struct module_state _state;
+
+#define GETSTATE(m) (&_state)
+#endif
+
 
 #define object_check(t) (Py_TYPE(t) == &pyIMAPI2FS_type)
 
@@ -202,6 +231,7 @@ static PyObject *imapi2fs_getcwd(PyObject *self, PyObject *noarg)
 		case imapi:
 		{
 			cwd = fgetcwd(obj->IMAPI2FS_Object);
+			
 
 			ret = PyString_FromString(cwd);
 
@@ -548,18 +578,20 @@ static PyObject *imapi2fs_getdisktype(PyObject *self, PyObject *noarg)
 
 //methods array with which to set tp_methods struct member
 static PyMethodDef FileSystem_methods[] =	{	//name, function, args (METH_NOARGS, METH_VARARGS, METH_VARARGS|METH_KEYWORDS), description
-												{"add", (PyCFunction)imapi2fs_add,  METH_VARARGS, PyDoc_STR("add a file to the ISO filesystem") },
-												{"mkdir", (PyCFunction)imapi2fs_mkdir, METH_VARARGS, PyDoc_STR("make a directory in the ISO filesystem") },
-												{"chdir", (PyCFunction)imapi2fs_chdir, METH_VARARGS, PyDoc_STR("change current working directory in ISO filesystem")},
-												{"getcwd", (PyCFunction)imapi2fs_getcwd, METH_NOARGS, PyDoc_STR("return current wording directory in ISO filesystem")},
-												{"list", (PyCFunction)imapi2fs_list, METH_KEYWORDS, PyDoc_STR("return list [] of files in ISO filesystem")},
-												{"extract", (PyCFunction)imapi2fs_extract, METH_KEYWORDS, PyDoc_STR("extract a file from the ISO filesystem") },
-												{"exists", (PyCFunction)imapi2fs_exists, METH_VARARGS, PyDoc_STR("check if the specified file exists in the ISO filesystem")},
-												{"close", (PyCFunction)imapi2fs_close, METH_NOARGS, PyDoc_STR("close this ISO filesystem")},
-												{"remove", (PyCFunction)imapi2fs_remove, METH_VARARGS, PyDoc_STR("remove the specified file from the ISO filesystem")},
+												{"add",			(PyCFunction)imapi2fs_add,	METH_VARARGS, PyDoc_STR("add a file to the ISO filesystem") },
+												{"mkdir",		(PyCFunction)imapi2fs_mkdir, METH_VARARGS, PyDoc_STR("make a directory in the ISO filesystem") },
+												{"chdir",		(PyCFunction)imapi2fs_chdir, METH_VARARGS, PyDoc_STR("change current working directory in ISO filesystem")},
+												{"getcwd",		(PyCFunction)imapi2fs_getcwd, METH_NOARGS, PyDoc_STR("return current wording directory in ISO filesystem")},
+												{"list",		(PyCFunction)imapi2fs_list, METH_VARARGS | METH_KEYWORDS, PyDoc_STR("return list [] of files in ISO filesystem")},
+												{"extract",		(PyCFunction)imapi2fs_extract, METH_VARARGS | METH_KEYWORDS, PyDoc_STR("extract a file from the ISO filesystem, optional 2nd arg destination path, e.g. e.extract(\"test\", path=\"c:\\temp\\test.out\")") },
+												{"exists",		(PyCFunction)imapi2fs_exists, METH_VARARGS, PyDoc_STR("check if the specified file exists in the ISO filesystem")},
+												{"close",		(PyCFunction)imapi2fs_close, METH_NOARGS, PyDoc_STR("close this ISO filesystem")},
+												{"remove",		(PyCFunction)imapi2fs_remove, METH_VARARGS, PyDoc_STR("remove the specified file from the ISO filesystem")},
 												{"getdisktype", (PyCFunction)imapi2fs_getdisktype, METH_NOARGS, PyDoc_STR("Return the string representation of specified physical media type")},
 												{NULL}//, NULL }//SENTINEL *ml_name must be NULL 
+												//{ NULL, NULL, 0, NULL }//alternate sentinel
 											};
+									
 
 //static PySequenceMethods FileSystem_sequence_methods[]={}
 static imapi2fs_object *imapi2fs_explain(PyTypeObject *type, PyObject *arg)
@@ -573,8 +605,12 @@ static imapi2fs_object *imapi2fs_object_new(PyTypeObject *type, PyObject *arg)
 {	//ptr to modules object type
 	imapi2fs_object *self;
 
+	//printf("about to use tp_alloc\nptr address is %p", type->tp_alloc);
+
 	//allocate a new object, referencing static object instance for typechecking
 	self = (imapi2fs_object *) type->tp_alloc(type, 0);
+
+	//printf("tp_alloc'd");
 
 	// NO INCREF DECREF 
 
@@ -587,8 +623,15 @@ static imapi2fs_object *imapi2fs_object_new(PyTypeObject *type, PyObject *arg)
 	
 	self->IMAPI2FS_Object = NULL;
 
+
+	//Generic is supposed to memset...
+#if PY_MAJOR_VERSION == 2
+	//printf("about to memset");
 	memset(self->drive, '\0', 2);
-	
+#endif
+
+	//printf("initializing member vars");
+
 	self->filename = NULL;
 	self->open = 0;
 	self->type = imapi;
@@ -637,9 +680,10 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 	
 	if (!strcmp(mode, "a") || !strcmp(mode, "w"))
 	{
-		//printf("about to create internal object");
+		//printf("about to create internal object\n");
+		
 		fsi = fcreateIMAPI2FS(filename, mode, disk_type);
-		//printf("%d", type);
+		
 		//printf("self is %p\n", self);
 	}
 	else if (!strcmp(mode, "r"))
@@ -680,6 +724,7 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 			//should replace this... esp for unicode systems in languages besides en-us
 			fread(drive, 3, 1, newdrive);
 			//printf("%s\n", drive);
+			
 			fclose(newdrive);
 			//remove("newdrive");
 
@@ -700,17 +745,23 @@ static PyObject *imapi2fs_open(PyObject *self, PyObject *args, PyObject *keywds)
 	
 	//this may be used for tp_new in pyIMAPI2FS_type, paramter 0 is object definition with all tp
 	//members, NOT ob_type
+	
+	//printf("about to python new the obj");
 	obj = imapi2fs_object_new(&pyIMAPI2FS_type, 0);
 
 	//copy drive letter to obj for ease of use in extract, list and similar functions
 	memcpy(obj->drive, drive, 2);
+	
 	//printf("%s\n", obj->drive);
+	
 	obj->open = 1;
 	obj->type = type;
 	memset(obj->path, 0, sizeof(obj->path));
-	
+
 	//printf("after set file handle\n");
+
 	obj->IMAPI2FS_Object = fsi;
+	
 	//printf("after set internal obj instance\n");
 
 	obj->filename = malloc(strlen(filename) + 1);
@@ -748,14 +799,18 @@ static PyObject *imapi2fs_isFileSystem(PyObject *self, PyObject *args)
 //method table global
 //python object methods and method table for module have similar structure and usage
 
-static PyMethodDef IMAPI2FS_methods[] = {
+static PyMethodDef module_name_methods[] = {
 	//python function name, actual/export function name, calling convention (METH_VARARGS, METH_NOARGS, or METH_VARARGS|METH_KEYWORDS or rarely old obsolete 0)
-	{ "open", (PyCFunction)imapi2fs_open, METH_KEYWORDS, "Create or open a new IMAPI2 FileSystem object with the optionally provided filename ('<time>'), stdlib open mode ('w'), and disk_type (\"CD\", \"DVD\", \"HDDVD\", \"DVDDL\",\"BluRay\")" },
-	{ "is_FileSystem", imapi2fs_isFileSystem, METH_VARARGS, "Return true if name is an "module_name".FileSystem that this module can " },
+	{ "open", (PyCFunction)imapi2fs_open, METH_VARARGS | METH_KEYWORDS, "Create or open a new IMAPI2 FileSystem object with the optionally provided filename=\"test.iso\", stdlib open mode='w',( or 'a', 'r'), and disk_type=\"CD\" (\"CD\", \"DVD\", \"DVDDL\",\"BluRay\")" },
+	{ "is_FileSystem", imapi2fs_isFileSystem, METH_VARARGS, "Return True if object is a "module_name".FileSystem" },
 	//NULL termination block (SENTINEL)
-	//{ NULL, NULL, 0, NULL }
+/*#if PY_MAJOR_VERSION >= 3
+	{ NULL, NULL, 0, NULL }
+#endif*/
 	//another example has sentinel as
+//#if PY_MAJOR_VERSION == 2
 	{ NULL, NULL }
+//#endif
 };
 static void imapi2fs_dealloc(PyObject *self)
 {
@@ -845,6 +900,7 @@ static PyObject *imapi2fs_repr(imapi2fs_object *self)
 {
 	//can be called by test.__repr__()
 	return PyString_FromFormat("IMAPI2 FileSystem: %s", self->filename);
+
 }
 
 static PyTypeObject pyIMAPI2FS_type = {
@@ -852,8 +908,13 @@ static PyTypeObject pyIMAPI2FS_type = {
 	* to be portable to Windows without using C++. */
 	//PyVarObject_HEAD_INIT(NULL, 0)
 	PyObject_HEAD_INIT(NULL)
-	0,							//obj_size
+#if PY_MAJOR_VERSION == 2
+	0,							//tp_internal? tp_reserved?	//obj_size ob_size
 	filesystem_type_name"."module_name, /*tp_name*/
+#endif
+#if PY_MAJOR_VERSION >= 3
+	module_name"."filesystem_type_name,
+#endif
 	sizeof(imapi2fs_object),    /*tp_basicsize*/
 	0,                          /*tp_itemsize*/
 	/* methods */
@@ -861,7 +922,7 @@ static PyTypeObject pyIMAPI2FS_type = {
 	(printfunc)imapi2fs_print,    /*tp_print*/
 	0,							/*tp_getattr - char * version referring to an attr */
 	0,							/*tp_setattr - char * version */
-	0,							/*tp_compare*/
+	0,							/*tp_compare py2, tp_as_async py3*/
 	(reprfunc)imapi2fs_repr,	/*tp_repr*/
 	0,							/*tp_as_number*/
 	0,							/*tp_as_sequence*/
@@ -910,14 +971,52 @@ static PyTypeObject pyIMAPI2FS_type = {
 	
 	Still seems to require PyType_GenericAlloc
 	*/
-	0,//PyType_GenericAlloc,	/*tp_alloc*/
-	//by replacing this line with "0," type instances have been prevented by invoking the ctor...
+#if PY_MAJOR_VERSION == 2
+	0,		/*tp_alloc for Py2, set by python*/
+#endif
+#if PY_MAJOR_VERSION >= 3
+	PyType_GenericAlloc,	/*tp_alloc for Py3*/
+#endif
+
+	  //by replacing this line with "0," type instances have been prevented by invoking the ctor...
 	//e.g. pyIMAPI2FS.FileSystem()
 	(newfunc)imapi2fs_explain,//(newfunc)imapi2fs_object_new,//PyType_GenericNew,		/*tp_new*/
 	//longobject uses PyObject_Del for free... 
 	0,//PyObject_Del,//PyObject_GC_Del,        /*tp_free*/
 	0,                      /*tp_is_gc*/
 };
+
+#if PY_MAJOR_VERSION >= 3
+
+static int module_name_traverse(PyObject *m, visitproc visit, void *arg) {
+	Py_VISIT(GETSTATE(m)->imapi2fs_error);
+	Py_VISIT(GETSTATE(m)->imapi2fs);
+	return 0;
+}
+
+static int module_name_clear(PyObject *m) {
+	Py_CLEAR(GETSTATE(m)->imapi2fs_error);
+	Py_CLEAR(GETSTATE(m)->imapi2fs);
+	return 0;
+}
+
+//Py3 ModuleDef structure
+static struct PyModuleDef moduledef = {
+	PyModuleDef_HEAD_INIT,
+	module_name,
+	NULL,
+	sizeof(struct module_state),
+//not sure where the following -1 is originally from, found it in Knio/py35win64ext on github, havent tried yet (per-interpreter state is better anyway)
+//	-1,      /* size of per-interpreter state of the module,
+//			 or -1 if the module keeps state in global variables. */
+	module_name_methods,
+	NULL,
+	module_name_traverse,
+	module_name_clear,
+	NULL
+};
+
+#endif
 
 /*
 from include/object.h
@@ -943,48 +1042,102 @@ typedef PyObject *(*allocfunc)(struct _typeobject *, Py_ssize_t);
 
 */
 
+
+
 //only function in module.def/exports that is not static, #define is either void for C or extern "C" for C++
-PyMODINIT_FUNC
-//documentation specified init<module_name>( void )
-initpyIMAPI(void)
+
+
+//match return and init fn name
+#if PY_MAJOR_VERSION >= 3
+	#define INITERROR return NULL
+//return signature defined for both 2 and 3
+PyMODINIT_FUNC PyInit_pyIMAPI(void)
+#endif
+#if PY_MAJOR_VERSION == 2
+#define INITERROR return
+	//return signature defined for both 2 and 3
+PyMODINIT_FUNC initpyIMAPI(void)
+#endif
 {
 	//declare module instance pointer
 	PyObject *module_instance;
+
+	struct module_state *st;
+
 //#define __DEBUGBREAK__
 #ifdef __DEBUGBREAK__
 	DebugBreak();
 #endif
-	pyIMAPI2FS_type.ob_type = &PyType_Type;
 
+#if PY_MAJOR_VERSION >= 3
+	module_instance = PyModule_Create(&moduledef);
+#endif
+#if PY_MAJOR_VERSION == 2
+	
+	
 	//initialize the module instance, original documentation specified py_InitModule (there are also py_InitModule2, 3, 4 functions) 
-	module_instance = Py_InitModule3(module_name, IMAPI2FS_methods, module_doc);
+	module_instance = Py_InitModule3(module_name, module_name_methods, module_doc);
+	
+#endif
+
 
 	//if the module could not be initialized, the return value was NULL/nullptr
 	if (module_instance == NULL)
-		return;
+	{
+		INITERROR;
+	}
+
+	st = GETSTATE(module_instance);
 
 	//name is the class name returned with type(), req python dotted name format (wrong style of name can cause a python crash), e.g. no underscore!
-	imapi2fs_error = PyErr_NewException(error_type_name, NULL, NULL);
-	Py_INCREF(imapi2fs_error);
+	st->imapi2fs_error = PyErr_NewException(error_type_name, NULL, NULL);
+
+#if PY_MAJOR_VERSION == 2
+	
+	Py_INCREF(st->imapi2fs_error);
 
 	//name is the name used to create and instance of the object, i.e. pythonex2.error()
-	PyModule_AddObject(module_instance, error_name, imapi2fs_error);
+	PyModule_AddObject(module_instance, error_name, st->imapi2fs_error);
 	
+
+#endif
+
+	//must be ready'd before use ( methods arent found and help crashes (at least in 3.6.5) et c if this is not called )
 	if (PyType_Ready(&pyIMAPI2FS_type) < 0)
 	{
 		//at least log or print error!
 		//DebugBreak();
-		return;
+		INITERROR;
 	}
 
+	//in MSVC the TypeObject def macro is not passed this (must be constants), so it should be set manually here
+	//while
+	//pyIMAPI2FS_type.ob_type = &PyType_Type;
+	//works in 2.7, it does not compile with the 3.6 source, the following replaces it for both
+	Py_TYPE(&pyIMAPI2FS_type) = &PyType_Type;
+
 	//inc ref count on ?module?
-	Py_INCREF(&imapi2fs);
+	/*&st->imapi2fs runs, but st->imapi2fs crashes*/
+	Py_INCREF(&st->imapi2fs);
+
+	//printf("imapi2fs->tp_alloc %p", pyIMAPI2FS_type.tp_alloc);
+	//printf("imapi2fs->tp_methods %p", pyIMAPI2FS_type.tp_methods);
 
 	//inc ref count on filesystem type
 	Py_INCREF(&pyIMAPI2FS_type);
 
 	PyModule_AddObject(module_instance, filesystem_type_name, (PyObject *)&pyIMAPI2FS_type);
 
+//#endif
+	/*
+	int j = sizeof(sz_disk_types) / sizeof(char *);
+
+	for (int i = 0; i < j; i++)
+	{
+		PyModule_AddObject(module_instance, sz_disk_types[i], Py_BuildValue("I", imapi_disk_types[i]));
+	}
+	*/
+	
 	//PyObject_Print()
 	//Py_DECREF();
 	//ex1_object = PyObject_New()
@@ -1016,5 +1169,11 @@ initpyIMAPI(void)
 	}
 #endif
 
+#if PY_MAJOR_VERSION >= 3
+
+	//Python3 init<ModuleName> function signature includes return of the PyModule_Create instantiated object
+	return module_instance;
+
+#endif
 
 }
