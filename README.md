@@ -15,7 +15,7 @@ v0.1a
 * Summary of set up
 pip install ./pyIMAPI from source root
 * Configuration
-* %PYTHONPATH% should be set to the root python directory (e.g. c:\python27)  VC9 for Python 2.7 is expected http://aka.ms/vcpython27  from an administrative VS command line, you can run builddistinstallrelease.bat to use msbuild to build and install the release version w/ pdb (i.e. the build is still debuggable in some form)  Dependencies
+* %PYTHONPATH% should be set to the root python directory (e.g. c:\python27)   VC9 for Python 2.7 is expected http://aka.ms/vcpython27   from a VS command line, you can run builddistinstallrelease.bat to use msbuild to build and install the release version w/ pdb (i.e. the build is still debuggable in some form)  Dependencies
 * How to run tests
 * Deployment instructions
 

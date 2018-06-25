@@ -5,8 +5,6 @@ import os
 import sys
 import platform
 
-import site
-
 platform_string = " ".join(platform.uname()).lower()
 module_name="pyIMAPI"
 
@@ -63,18 +61,24 @@ requirements = []
 if sys.version_info[0] < 3 and sys.version_info[1] < 7:
 	requirements.append('importlib')
 
-site_path = [path for path in site.getsitepackages() if "site-packages" in path][0]
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
+#evaluated during wheel build, this doesnt work for distro
+#import site
+#site_path = [path for path in site.getsitepackages() if "site-packages" in path][0]
 
 #name is the name of the package to pip and distutils
 setup(name=module_name,
       #adding site_path fixes local pip install ./pyIMAPI data dir but breaks distro with wheel/twine
       #just build with python setup.py sdist bdist_wheel and pip install dist\<wheel package or sdist> to test
       data_files=[("\\", ["pyIMAPI2FS-dll\\"+arch+"\\pyIMAPI2FSutil.dll"])],
-      version="0.3.0a1",
+      version="0.4.0b2",
       author="Kenneth Long",
       author_email="kennethlong@acm.org",
       url="http://bitbucket.org/ken_long/pyIMAPI2FS/",
-      description="A python module to provide a tarfile like object for creating ISO 9660 files using a Windows IMAPI2 FileSystem COM object (I feel happy!)",
+      description="Create CD, DVD, DVD Dual Layer, and BluRay ISO images under Windows directly from Python",
+      long_description = long_description,
       license="MIT License",
       #test_suite='tests.test_all',
       install_requires=requirements,
@@ -88,6 +92,10 @@ setup(name=module_name,
           'Programming Language :: C++',
           'Programming Language :: Python',
           'Programming Language :: Python :: 2.7',
+          'Programming Language :: Python :: 3.4',
+          'Programming Language :: Python :: 3.5',
+          'Programming Language :: Python :: 3.6',
+          'Programming Language :: Python :: 3.7',
           'Topic :: Multimedia',
           'Topic :: Software Development :: Libraries',
           'Topic :: Software Development :: Libraries :: Python Modules',
@@ -97,9 +105,14 @@ setup(name=module_name,
           'Topic :: System :: Filesystems',
           'Topic :: System :: Software Distribution',
           'Topic :: Utilities',
-          'Development Status :: 3 - Alpha',
+          'Development Status :: 4 - Beta',
           'Operating System :: Microsoft :: Windows',
+          'Operating System :: Microsoft :: Windows :: Windows XP',
+          'Operating System :: Microsoft :: Windows :: Windows Vista',
           'Operating System :: Microsoft :: Windows :: Windows 7',
+          'Operating System :: Microsoft :: Windows :: Windows 8',
+          'Operating System :: Microsoft :: Windows :: Windows 8.1',
+          'Operating System :: Microsoft :: Windows :: Windows 10',
           'Environment :: Win32 (MS Windows)',
           'Environment :: Console',
       ],

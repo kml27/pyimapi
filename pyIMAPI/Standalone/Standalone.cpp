@@ -40,7 +40,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		"NA",
 	};
 
-    // TODO: Place code here.
+	//*Pass argv[0] to the Python interpreter * /
+	//Py_SetProgramName(argv[0]);
+
+	/* Initialize the Python interpreter.  Required. */
+	//Py_Initialize();
+
+	/* Add a static module */
+	//initpyIMAPI();
+	
+	// TODO: Place code here.
 	//test read non-existent iso
 	
 	for (int i = 0; i < sizeof(disk_types)/sizeof(char *); i++)

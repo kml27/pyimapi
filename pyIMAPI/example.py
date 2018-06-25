@@ -6,10 +6,23 @@ t = open("test.txt", "w")
 t.write("this test works")
 t.close()
 
-print("creating default iso (BluRay)")
+print("creating default iso (\"CD\")")
 o = pyIMAPI.open("test.iso")
 o.add("test.txt")
 o.close()
+
+disk_types = ["CD", "DVD", "DVDDL", "BluRay"]
+
+for dt in disk_types:
+	specific_physical_media_test_filename = dt+"-test.txt"
+	t = open(specific_physical_media_test_filename, "w")
+	t.write("this "+ dt +" test works")
+	t.close()
+
+	o = pyIMAPI.open(dt+"-test.iso", disk_type=dt)
+	o.add(specific_physical_media_test_filename)
+	o.close()
+
 
 print("opening created iso")
 i = pyIMAPI.open("test.iso", "r")
