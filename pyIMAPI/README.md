@@ -5,10 +5,23 @@
 		* Light-weight
 		* Free 
 		* Open source
-
+		
 	pyIMAPI exposes built-in Windows Image Mastering API functionality. 
 	
-	Support has also been added to mount ISO images using PowerShell Mount-DiskImage. Currently, pyIMAPI only uses ISO9660 mode when creating ISOs. Other IMAPI functionality like Joliet format and Redbook Audio is not currently supported, but can be added.  
+	Support has also been added to mount ISO images using PowerShell Mount-DiskImage. Currently, pyIMAPI only sets ISO9660 mode when creating ISOs, but IMAPI will (often/always?) set UDF. Other IMAPI functionality like setting Joliet format, or creating Redbook Audio CDs is not currently implemented.
+	
+	
+	Release Notes for v0.6.0b1
+	
+	## What's New
+		* Emulated "append" mode
+		* Create bootable images (set boot sector, https://en.wikibooks.org/wiki/X86_Assembly/Bootloaders)
+		* Add directory as directory or all files under directory (previously only added directory, didn't work for root (e.g. i.add("G:\\") did not add files in root of "G:\"))
+		* Get and Set ISO volume name
+		
+	## Fixes
+		
+		* Adding file by path from specified drive letter (e.g. i.add("G:\test.py"))
 
 	Release Notes for v0.4.0b2
 	
@@ -23,7 +36,8 @@
 
 	## Example Usage
 
-	``` from __future__ import print_function
+	```
+	from __future__ import print_function
 	import pyIMAPI
 
 	print("writing test file")
@@ -66,7 +80,8 @@
 			print("error files don't match")
 			quit()
 
-	print("extracted file matches original") ```
+	print("extracted file matches original")
+	```
 
 
 	[Source](https://bitbucket.org/ken_long/pyIMAPI2FS)
