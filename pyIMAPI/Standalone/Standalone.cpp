@@ -57,11 +57,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 		char *cur_disk_type = disk_types[i];
 
-		void *obj = fcreateIMAPI2FS("testiso", "r", cur_disk_type);
+		void *obj = fcreateIMAPI2FS("testiso", "r", cur_disk_type, FALSE);
 
 		fcloseImage(obj);
 
-		obj = fcreateIMAPI2FS("testiso", "w", cur_disk_type);
+		obj = fcreateIMAPI2FS("testiso", "w", cur_disk_type, FALSE);
 		char*r = fmkdir(obj, "test");
 
 		long n = fcount(obj);
@@ -86,7 +86,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		e = fexists(obj, "test");
 		assert(e == 0);
 
-		char*s = fadd(obj, "dne_test");
+		char*s = fadd(obj, "dne_test", FALSE);
 
 		n = fcount(obj);
 		assert(n == 0);
@@ -96,7 +96,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 		fremove(obj, "dne_test");
 
-		s = fadd(obj, "exists_test");
+		s = fadd(obj, "exists_test", FALSE);
 
 		n = fcount(obj);
 		assert(n == 1);
@@ -113,7 +113,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		ffreelist(obj, list);
 		fcloseImage(obj);
 
-		obj = fcreateIMAPI2FS("testiso", "r", cur_disk_type);
+		obj = fcreateIMAPI2FS("testiso", "r", cur_disk_type, FALSE);
 		
 		//fextract
 

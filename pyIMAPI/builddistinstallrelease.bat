@@ -21,5 +21,5 @@ copy /y Release\pyIMAPI2FSutil.dll pyIMAPI2FS-dll\x86
 copy /y Release\pyIMAPI2FSutil.lib pyIMAPI2FS-dll\x86
 copy /y Release\pyIMAPI2FSutil.pdb pyIMAPI2FS-dll\x86
 
-python setup.py sdist
-pip install --upgrade ./dist/pyIMAPI-0.1.0a17.tar.gz
+python setup.py bdist_wheel
+REM pip install --upgrade ./dist/pyIMAPI-0.1.0a17.tar.gz

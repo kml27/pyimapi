@@ -14,25 +14,32 @@
 extern "C"
 {
 #endif
-	PYIMAPI_API void *fcreateIMAPI2FS(char *filename, char *mode, char *disk_type);
+	PYIMAPI_API void *fcreateIMAPI2FS(char *filename, char *mode, char *disk_type, int bootable);
 	PYIMAPI_API void fdeleteIMAPI2FS(void *);
-	PYIMAPI_API char *fgetcwd(void *obj);
+	PYIMAPI_API char *fgetcwd(void *cpp_obj_ptr);
 	PYIMAPI_API void ffreecwd(char *cwd);
-	PYIMAPI_API char *fmkdir(void *obj, char *path);
-	PYIMAPI_API char *fchdir(void *obj, char *path);
-	PYIMAPI_API void fcloseImage(void *obj);
-	PYIMAPI_API int fexists(void *obj, char *filename);
-	PYIMAPI_API char **flist(void *obj);
-	PYIMAPI_API void ffreelist(void *obj, char **paths);
-	PYIMAPI_API char *fadd(void *obj, char *filename);
-	PYIMAPI_API int fremove(void *obj, char *filename);
+	PYIMAPI_API char *fmkdir(void *cpp_obj_ptr, char *path);
+	PYIMAPI_API char *fchdir(void *cpp_obj_ptr, char *path);
+	PYIMAPI_API void fcloseImage(void *cpp_obj_ptr);
+	PYIMAPI_API int fexists(void *cpp_obj_ptr, char *filename);
+	PYIMAPI_API char **flist(void *cpp_obj_ptr);
+	PYIMAPI_API void ffreelist(void *cpp_obj_ptr, char **paths);
+	PYIMAPI_API char *fadd(void *cpp_obj_ptr, char *filename, int add_dir);
+	PYIMAPI_API int fremove(void *cpp_obj_ptr, char *filename);
+
+	PYIMAPI_API char *wrapper_setvolumename(void *cpp_obj_ptr, char *vol_name);
+	PYIMAPI_API char *wrapper_getvolumename(void *cpp_obj_ptr);
+	PYIMAPI_API void wrapper_delete_array(char *mem_to_delete);
+
+	PYIMAPI_API char* wrapper_setbootsector(void *cpp_obj_ptr, char *filename);
+
 	//extract is handled by reading layer (powershell or 7zip, iso isnt written till file close)
-	//PYIMAPI_API int fextract(void *obj, char *isofile_member, char *dest_system_path);
+	//PYIMAPI_API int fextract(void *cpp_obj_ptr, char *isofile_member, char *dest_system_path);
 #ifndef LONG
 //try to match VS LONG #define to the likely type
-	PYIMAPI_API long fcount(void *);
+	PYIMAPI_API long fcount(void *cpp_obj_ptr);
 #else
-	PYIMAPI_API LONG fcount(void *);
+	PYIMAPI_API LONG fcount(void *cpp_obj_ptr);
 #endif
 #ifdef __cplusplus
 }
@@ -48,6 +55,7 @@ class  CpyIMAPIObject
 	IFsiDirectoryItem*	root;
 	IFsiDirectoryItem*	current_directory;
 	IFileSystemImage*	FileSystem;
+	IBootOptions*		BootOptionsInstance;
 	FsiFileSystems		fs_type;
 	IFsiItem*			item_iter;
 
@@ -56,12 +64,12 @@ class  CpyIMAPIObject
 	IMAPI_MEDIA_PHYSICAL_TYPE imapi_disk_type;
 
 public:
-	CpyIMAPIObject(char *filename, char *mode, char *disk_type);
+	CpyIMAPIObject(char *filename, char *mode, char *disk_type, int bootable);
 	~CpyIMAPIObject(void);
-	// TODO: add your methods here.
-	void		set_volume_name(char* volumename);
+	
+	char*		set_volume_name(char* volumename);
 	char*		get_volume_name();
-	char*		add(char* filename);//, char *dest_filename);
+	char*		add(char* filename, int add_dir);//, char *dest_filename);
 	char*		getCWD();
 	wchar_t*	getwCWD();
 	char*		setCWD(char *path);
@@ -76,8 +84,11 @@ public:
 
 	int			extract(char *filename, char *dest_system_path);
 
+	char*		set_boot_sector(char *filename);
+
 	//return IsoInfo object
 	void*		next();
+
 };
 
 /*

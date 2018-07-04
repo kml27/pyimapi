@@ -28,5 +28,7 @@
 //#include <conio.h>
 #include <stdio.h>
 
+#include <direct.h>
+
 // TODO: reference additional headers your program requires here
 #include "pyIMAPI.h"

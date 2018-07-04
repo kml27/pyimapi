@@ -2,13 +2,58 @@
 //
 
 #include "stdafx.h"
+#include <exception>
 //#include "pyIMAPI.h"
 // This is an example of an exported variable
 //PYIMAPI_API int npyIMAPI=0;
 
-// This is an example of an exported function.
+char *HRtoStr(HRESULT hr)
+{
+	char *result = "Error not found";
 
-CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode, char *disk_type) : output_file(NULL)
+	switch (hr)
+	{
+		case IMAPI_E_DIR_NOT_FOUND:
+			result = "The dest directory was not found in FileSystemImage hierarchy.\n";
+			break;
+		case IMAPI_E_FILE_NOT_FOUND:
+			result = "The file was not found in FileSystemImage hierarchy.\n";
+			break;
+		case IMAPI_E_IMAGE_SIZE_LIMIT:
+			result = "Adding files would result in a result image having a size larger than the current configured limit.\n";
+			break;
+		case IMAPI_E_IMAGE_TOO_BIG:
+			result = "Value specified for FreeMediaBlocks property is too small for estimated image size based on current data.\n";
+			break;
+		case IMAPI_E_ISO9660_LEVELS:
+			result = "ISO9660 is limited to 8 levels of directories.\n";
+			break;
+		case IMAPI_E_RESTRICTED_NAME_VIOLATION:
+			result = "The filename or path specified is not legal: Name of file or directory object created while the UseRestrictedCharacterSet property is set may only contain ANSI characters.\n";
+			break;
+		case IMAPI_E_BOOT_OBJECT_CONFLICT:
+			result = "A boot object can only be included in an initial disc image.\n";
+			break;
+		case IMAPI_E_BOOT_IMAGE_DATA:
+			result = "The boot object could not be added to the image.\n";
+			break;
+		case IMAPI_E_BOOT_EMULATION_IMAGE_SIZE_MISMATCH:
+			result = "The emulation type requested does not match the boot image size.\n";
+			break;
+		case IMAPI_E_DUP_NAME:
+			result = "The specified name already exists.\n";
+			break;
+		/*default:
+			__assume(0);*/
+	}
+
+	return result;
+}
+
+
+CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode, char *disk_type, int bootable) : 
+		output_file(NULL), 
+		BootOptionsInstance(NULL)
 {
 	/*MsftRawCDImageCreator *cd_ic = NULL;
 	LPVOID COMptr = NULL;
@@ -25,6 +70,9 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode, char *disk_type) : ou
 	LPVOID COMptr = NULL;
 	CLSID FSI_CLSID = __uuidof(MsftFileSystemImage);
 	REFIID FSI_IID = __uuidof(IFileSystemImage);
+
+	CLSID BootOpt_CLSID = __uuidof(BootOptions);
+	REFIID BootOpt_IID = __uuidof(IBootOptions);
 
 	HRESULT hr = S_OK;
 #ifdef _DEBUG
@@ -45,6 +93,39 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode, char *disk_type) : ou
 	//printf("cocreateinstance");
 	hr = CoCreateInstance(FSI_CLSID, NULL, CLSCTX_INPROC_SERVER, FSI_IID, (void **)&FileSystem);
 
+
+	if (bootable)
+	{
+		//https://docs.microsoft.com/en-us/windows/desktop/imapi/adding-a-boot-image
+		hr = CoCreateInstance(BootOpt_CLSID, NULL, CLSCTX_INPROC_SERVER, BootOpt_IID, (void **)&BootOptionsInstance);
+
+		BootOptionsInstance->put_Manufacturer(_com_util::ConvertStringToBSTR(""));
+
+		/*
+		Constants
+			PlatformX86	Intel Pentium™ series of chip sets. This entry implies a Windows operating system.
+			PlatformPowerPC	Apple PowerPC family.
+			PlatformMac	Apple Macintosh family.
+			PlatformEFI	EFI Family.
+		*/
+
+		BootOptionsInstance->put_PlatformId(PlatformX86);
+
+		/*
+		Constants
+			EmulationNone	No emulation. The BIOS will not emulate any device type or special sector size for the CD during boot from the CD.
+			Emulation12MFloppy	Emulates a 1.2 MB floppy disk.
+			Emulation144MFloppy	Emulates a 1.44 MB floppy disk.
+			Emulation288MFloppy	Emulates a 2.88 MB floppy disk.
+			EmulationHardDisk	Emulates a hard disk.
+		*/
+
+		BootOptionsInstance->put_Emulation(EmulationNone);
+
+		//BootOptionsInstance->AssignBootImage()
+		hr = FileSystem->put_BootImageOptions(BootOptionsInstance);
+
+	}
 	//todo: add support for other types of images like dvd and blu-ray
 	//types specified in imapi2.h enum _IMAPI_MEDIA_PHYSICAL_TYPE
 	//_IMAPI_MEDIA_PHYSICAL_TYPE
@@ -70,9 +151,9 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode, char *disk_type) : ou
 	};
 
 	_IMAPI_MEDIA_PHYSICAL_TYPE imapi_disk_types[] = {
-		IMAPI_MEDIA_TYPE_CDR,
-		IMAPI_MEDIA_TYPE_DVDPLUSR,
-		IMAPI_MEDIA_TYPE_DVDPLUSR_DUALLAYER,
+		IMAPI_MEDIA_TYPE_CDRW,
+		IMAPI_MEDIA_TYPE_DVDPLUSRW,
+		IMAPI_MEDIA_TYPE_DVDPLUSRW_DUALLAYER,
 		//IMAPI_MEDIA_TYPE_HDDVDR,
 		IMAPI_MEDIA_TYPE_BDR,
 	};
@@ -106,6 +187,8 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode, char *disk_type) : ou
 		}
 		//release cocreateinstanced instance
 		
+		printf("error creating image\n");
+
 		//assert(false);
 		return;
 	}
@@ -133,20 +216,28 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode, char *disk_type) : ou
 		/*
 		Open for appending with no compression. The file is created if it does not exist.
 		*/
-		grfMode |= STGM_READWRITE | STGM_CREATE;
-		create = TRUE;
+
+//		PathFileExistsA
+
+		//maybe these flags seem a little confusing, since we'd typically want to read/write for append
+		//this implementation uses a tmp file, and we want to avoid overwriting existing files in the case
+		//of a crash or failure (as to not lose info)
+		//this grfMode combination will open the tmp file for write, but will not overwrite
+		//it will also create the file if the file does not currently exist
+		grfMode |= STGM_WRITE | STGM_CREATE; // STGM_FAILIFTHERE;
+		create = true;
 	}
 	else if(!::_strcmpi(mode, "r"))
 	{
-		printf("readonly file\n");
 		grfMode |= STGM_READ;
 
-		printf("Readonly not supported by IMAPI code. Bad code path.");
+		//printf("Readonly not supported by IMAPI code. Bad code path.");
 	}
 	else if (!::_strcmpi(mode, "w"))
 	{
-		printf("writeonly file");
+		//always create and overwrite
 		grfMode |= STGM_WRITE | STGM_CREATE;
+		create = true;
 		//FileSystem->ImportFileSystem
 	}
 
@@ -160,7 +251,10 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode, char *disk_type) : ou
 										NULL, 
 										&output_file);
 	
-//implementing powershell mount of iso for readonly
+
+	//implementing powershell mount of iso for readonly
+
+	//should continue investigating this option in light of Mount-DiskImage issue(s) (performance et c)
 
 	//printf("create %s with mode %s had result %d", filename, mode, hr);
 	//FileSystem->IdentifyFileSystemsOnDisc();
@@ -169,6 +263,8 @@ CpyIMAPIObject::CpyIMAPIObject(char *filename, char *mode, char *disk_type) : ou
 	FileSystem->put_MultisessionInterfaces(image->get_MultisessionInterfaces())
 	//FileSystem->ImportFileSystem();
 	*/
+
+	//printf("hr is %x\n", hr);
 
 	return;
 }
@@ -186,17 +282,33 @@ CpyIMAPIObject::~CpyIMAPIObject()
 	if(output_file!=NULL)
 		output_file->Release();
 }
-void CpyIMAPIObject::set_volume_name(char * volumename)
+
+char* CpyIMAPIObject::set_volume_name(char * volumename)
 {
 	size_t size = strlen(volumename)+1;
-	if (size > 255)
-		return;
+
+	//The string is limited to 15 characters. 
+	//If you do not specify a volume name, a default volume name is generated using the system date and time when the result object is created.
+
+	//https://docs.microsoft.com/en-us/windows/desktop/api/imapi2fs/nf-imapi2fs-ifilesystemimage-put_volumename
+
+	if (size > 15)
+		return "Provided volume name exceeds maximum allowed 15 characters";
+
+	//printf("volume name %s %d\n", volumename, size);
 
 	BSTR bvolumename = _com_util::ConvertStringToBSTR(volumename);
 
 	HRESULT hr = FileSystem->put_VolumeName(bvolumename);
 
+	if (hr)
+	{
+		return HRtoStr(hr);
+	}
+
 	SysFreeString(bvolumename);
+
+	return NULL;
 }
 
 char * CpyIMAPIObject::get_volume_name()
@@ -212,7 +324,54 @@ char * CpyIMAPIObject::get_volume_name()
 
 	strcpy_s(volumename, len, _com_util::ConvertBSTRToString(bstr_volumename));
 
+	//printf("getting name %s %d\n", volumename, len);
+
 	return volumename;
+}
+
+char *CpyIMAPIObject::set_boot_sector(char *filename) 
+{
+	wchar_t wfilename[257];
+	size_t size;
+
+	::mbstowcs_s(&size, wfilename, filename, 256);
+
+	IStream *file_stream = NULL;
+
+	HRESULT hr = SHCreateStreamOnFileEx(wfilename,
+		STGM_READ | STGM_SHARE_DENY_WRITE,
+		FILE_ATTRIBUTE_NORMAL,
+		FALSE,
+		NULL,
+		&file_stream);
+
+	if (hr != S_OK)
+	{
+		//printf("hr is %x\n", hr);
+		return HRtoStr(hr);
+	}
+
+
+	if (file_stream != NULL)
+	{
+		//wchar_t *wfullpath = getFullPath(wfilename);
+
+		if (BootOptionsInstance)
+		{
+			hr = BootOptionsInstance->AssignBootImage(file_stream);
+		}
+		
+		file_stream->Release();
+
+		if (hr != S_OK)
+		{
+			//printf("hr is %x\n", hr);
+			return HRtoStr(hr);
+		}
+	}
+
+	return NULL;
+
 }
 
 LONG CpyIMAPIObject::count()
@@ -288,42 +447,226 @@ void CpyIMAPIObject::close()
 		output_file->Release();
 }
 
+void str_replace(char *path, char tok, char rpl) 
+{
+	for (char *c = path; c = strpbrk(c, &tok);) 
+	{
+		*c++ = rpl;
+		
+	}
+}
+
+bool absolute_path(char *path) 
+{
+	return '\\'== path[0] || ':' == path[1];
+	//return strpbrk(path, "\\") == path;
+}
+
+int count_chr_below_alpha(char *path) 
+{
+	int count = 0;
+
+	for (char *c = path; *c; c++)
+	{
+		if (*c < 65) 
+		{
+			count++;
+		}
+	}
+
+	return count;
+}
+
+char *dup_backslash(char *raw_path)
+{
+	int count = count_chr_below_alpha(raw_path);
+
+	size_t len = strlen(raw_path) + count + 1;
+
+	char *dup_path = new char[len];
+
+	for (char *c = raw_path, *cpy = dup_path; *c; c++, cpy++)
+	{
+		if (c[0] < 65)
+		{
+			cpy++[0] = '\\';
+		}
+
+		cpy[0] = c[0];
+	}
+
+	return dup_path;
+}
+
+void remove_dup_slash(char *path) 
+{
+	size_t len = strlen(path);
+
+	char adv = 1;
+
+	char *revised = path;
+
+	for (char *orig = path; *orig; orig++, revised+=adv)
+	{
+		*revised = *orig;
+		
+		if (orig[0] == '\\' && orig[1] == '\\')
+		{
+			adv = 0;
+		}
+		else
+		{
+			adv = 1;
+		}
+	}
+	//null terminate at new end of str
+	revised[0] = '\0';
+}
+
+char *clean_path(char *base_path, char *path)
+{
+
+	//start with 2 for null and possible '\\'
+	size_t max_len = 2;
+
+	size_t base_len = strlen(base_path);
+	size_t path_len = strlen(path);
+
+	printf("base_path %s len %zd path %s len %zd\n", base_path, base_len, path, path_len);
+
+	max_len += base_len + path_len;
+
+	char *complete_path = new char [max_len];
+
+	//str_replace(base_path, '/', '\\');
+	str_replace(path, '/', '\\');
+	
+	printf("after slash replace %s\n", path);
+
+	if (!absolute_path(path)) 
+	{
+		printf("not abs path\n");
+
+		char *concat_path = "%s\\%s";
+
+		if (base_path[base_len-1] == '\\')
+		{
+			concat_path = "%s%s";
+
+			printf("base path ends in \\\n");
+		}
+
+		printf("not abs path, before sprintf, %zd\n", max_len);
+
+		sprintf_s(complete_path, max_len, concat_path, base_path, path);
+
+		printf("not abs path, completepath %s\n", complete_path);
+	}
+	else 
+	{
+		printf("abs path\n");
+		
+		sprintf_s(complete_path, max_len, "%s", path);
+		
+		printf("abs path, completepath %s\n", complete_path);
+	}
+
+	remove_dup_slash(complete_path);
+
+	printf("after remove dup completepath %s\n", complete_path);
+
+	max_len = strlen(complete_path);
+
+	//if this isn't the root of a letter drive, strip trailing slash
+	if (complete_path[max_len - 2] != ':' && complete_path[max_len - 1] == '\\' )
+	{
+		//null terminate early, IMAPI doesnt like trailing slashes for directories
+		complete_path[max_len - 1] = '\0';
+	}
+
+	printf("final completepath %s\n", complete_path);
+
+	return complete_path;
+}
+
 /*
 char* CpyIMAPIObject::add(char *filename, char *dest)
 {}
 */
 
-char* CpyIMAPIObject::add(char *filename)
+char* CpyIMAPIObject::add(char *filename, int add_dir)
 {
 	char *result = "File could not be added. File not found";
 
 	wchar_t wfilename[257];
-	size_t size;
-	::mbstowcs_s(&size, wfilename, filename, 256);
+	size_t size = strlen(filename);
 
 	if (size > 255)
-		return "Filename exceeds 255 characters";
-	/*
+		return "Filename exceeds 255 characters.\n";
+
+
+	//printf("C++ iso add, %p\n", this);
+
+	char path[256];
+
+	::_getcwd(path, 256);
+
+	char *fullpath = clean_path(path, filename);
+
 	wchar_t wfullpath[512];
+	
+	::mbstowcs_s(&size, wfullpath, fullpath, 256);
+	
+	delete[]fullpath;
 
-	::mbstowcs_s(&size, wfullpath, getCWD(), 512);
+	wprintf(L"%s\n", wfullpath);
 
-	wsprintf(wfullpath, L"%s\\%s", wfullpath, wfilename);
-	*/
-	//path
-	BSTR bfilename = _com_util::ConvertStringToBSTR(filename);
-
-	IStream *file_stream = NULL;
+	BSTR bfilename = NULL;
 
 	if (PathIsDirectory(wfilename))
 	{
 		//add tree
-		//printf("add tree\n");
-		current_directory->AddTree(bfilename, TRUE);
-		result = NULL;
+		printf("add tree, %s, %p, %d\n", filename, current_directory, add_dir);
+
+		//source directory is specified to AddTree
+		bfilename = _com_util::ConvertStringToBSTR(filename);
+		
+		HRESULT hr = S_OK;
+		
+		hr = current_directory->AddTree(bfilename, add_dir);// TRUE);
+		
+		printf("added tree\n");
+
+		if (hr != S_OK)
+		{
+			printf("hr is %x\n", hr);
+			return HRtoStr(hr);
+		}
+
 	}
 	else
 	{
+		if (!PathFileExists(wfilename))
+		{
+			return "File does not exist.\n";
+		}
+
+		char *c = filename, *filename_to_use = filename;
+
+		if (c = strchr(filename, ':'))
+		{
+			filename_to_use = c + 1;
+		}
+
+		//printf("path after drive is %s\n", filename_to_use);
+
+		//path
+		bfilename = _com_util::ConvertStringToBSTR(filename_to_use);
+
+		IStream *file_stream = NULL;
+
+		//printf("adding single file to iso\n");
+
 		HRESULT hr = SHCreateStreamOnFileEx(wfilename,
 			STGM_READ | STGM_SHARE_DENY_WRITE,
 			FILE_ATTRIBUTE_NORMAL,
@@ -345,29 +688,55 @@ char* CpyIMAPIObject::add(char *filename)
 		fileData [in]
 		An IStream interface of the file (data stream) to write to the media.
 		*/
+		if (hr != S_OK) 
+		{
+			//printf("hr is %x\n", hr);
+			return HRtoStr(hr);
+		}
+
 		
 		if (file_stream != NULL)
 		{
+			//printf("filestream is not null\n");
+
 			//wchar_t *wfullpath = getFullPath(wfilename);
 
+			//printf("current directory object is %p\n", current_directory);
+
 			//IFsiFileItem *file_item = NULL;
-			hr = current_directory->AddFile(bfilename, file_stream);
+			if (current_directory) 
+			{
+				hr = current_directory->AddFile(bfilename, file_stream);
+			}
+
+			
 			//IFsiFileItem *out;
 		//	FileSystem->CreateFileItem(wfilename, &out);
 
 			//out->put_Data(file_stream);
 
 			file_stream->Release();
+
+			if (hr != S_OK)
+			{
+				//printf("hr is %x\n", hr);
+				return HRtoStr(hr);
+			}
+
 			//out->Release();
-			result = NULL;
+			//result = NULL;
+
+
 		}
 
 
 	}
 	
+	printf("after add branches\n");
+
 	SysFreeString(bfilename);
 
-	return result;
+	return NULL;
 }
 
 char **CpyIMAPIObject::list()
@@ -437,7 +806,7 @@ char *CpyIMAPIObject::getCWD()
 	}
 	else
 	{
-		printf("no dir");
+		//printf("no dir\n");
 	}
 	
 	strcpy_s(&path[len], 3, "\\");
@@ -457,8 +826,9 @@ char *CpyIMAPIObject::setCWD(char * path)
 	bool free_path = false;
 
 	//if the path starts with root, use absolute path
-	if (strpbrk(path, "\\")==path)
-		absolute = true;
+	//if (strpbrk(path, "\\")==path)
+	//	absolute = true;
+	absolute = absolute_path(path);
 
 	//if the strings are equal the diff is 0, not to test for equiv 
 	//should use strtok/strpbrk
@@ -548,7 +918,7 @@ char *CpyIMAPIObject::mkdir(char *path)
 
 	if (FileSystem == nullptr || current_directory == nullptr)
 	{
-		printf("nullptr member\n");
+		//printf("nullptr member\n");
 		return "FileSystem not initialized properly\n";
 	}
 	
@@ -615,24 +985,31 @@ Value: 0x8007000E
 	return path;
 }
 
-bool CpyIMAPIObject::exists(char * filename)
+bool CpyIMAPIObject::exists(char *filename)
 {
-	
-	char fullpath[512];
+	//char fullpath[512];
 
 	//printf("in exists dll\n");
+	
 	char *cwd = getCWD();
-	//printf("after getcwd\n");
+	
+	//printf("filename %s, after getcwd, cwd %s\n", filename, cwd);
 
+	//windows already behaves as is without dup_backslash, 
+	//and no way besides direct map to convert back from special escaped chars?
+	//char *filename = dup_backslash(raw_filename);
 
+	//printf("dup_backslash filename %s\n", filename);
 
-	sprintf_s(fullpath, 512, "%s%s", cwd, filename);
-	//printf("after sprintf\n");
+	char *fullpath = clean_path(cwd, filename);
+	
+	//printf("after sprintf, %s\n", fullpath);
+	
 	delete []cwd;
 	//path
 	BSTR bfilename = _com_util::ConvertStringToBSTR(filename);
 	BSTR bfullpath = _com_util::ConvertStringToBSTR(fullpath);
-	
+
 	FsiItemType type;
 
 	//following seems to work for file
@@ -664,6 +1041,8 @@ bool CpyIMAPIObject::exists(char * filename)
 	SysFreeString(bfilename);
 	SysFreeString(bfullpath);
 
+	delete[]fullpath;
+
 	return item_exists;
 }
 
@@ -679,10 +1058,20 @@ void CpyIMAPIObject::freelist(char **list)
 
 	delete[] list;
 }
+
 int CpyIMAPIObject::remove(char *filename)
 {
-	BSTR bfilename = _com_util::ConvertStringToBSTR(filename);
-	 
+
+	char *cwd = getCWD();
+
+	char *fullpath = clean_path(cwd, filename);
+
+	//BSTR bfilename = _com_util::ConvertStringToBSTR(filename);
+
+	BSTR bfilename = _com_util::ConvertStringToBSTR(fullpath);
+
+	delete[]fullpath;
+
 	//is a check for directory and RemoveTree required? IMAPI_E_DIR_NOT_EMPTY
 
 	//IMAPI_E_ITEM_NOT_FOUND
@@ -690,6 +1079,7 @@ int CpyIMAPIObject::remove(char *filename)
 	HRESULT hr = current_directory->Remove(bfilename);
 
 	SysFreeString(bfilename);
+
 
 	if (hr == S_OK)
 		return 1;
@@ -702,7 +1092,7 @@ void *CpyIMAPIObject::next()
 {
 	return NULL;
 }
-
+/*
 int CpyIMAPIObject::extract(char *filename, char *dest_system_path)
 {
 	int result = FALSE;
@@ -718,36 +1108,18 @@ int CpyIMAPIObject::extract(char *filename, char *dest_system_path)
 	}
 	else
 	{
-		printf("using provided path\n");
+		//printf("using provided path, %s\n", dest_system_path);
 		size_t size;
 		::mbstowcs_s(&size, wpath, dest_system_path, 512);
 	}
 
 	wsprintf(wpath, L"%s\\%s", wpath, wfilename);
-	wprintf(L"%s\n", wpath);
+	//wprintf(L"%s\n", wpath);
 
 	DWORD grfMode = STGM_SHARE_DENY_WRITE;
-	bool create = FALSE;
+	bool create = TRUE;
 
-	char *mode = "a";
-
-	if (!strcmp(mode, "a"))
-	{
-		//'a' from python Tarfile docs
-		/*
-		Open for appending with no compression. The file is created if it does not exist.
-		*/
-		grfMode |= STGM_READWRITE | STGM_CREATE;
-		create = TRUE;
-	}
-	else if (!strcmp(mode, "r"))
-	{
-		grfMode |= STGM_READ;
-	}
-	else if (!strcmp(mode, "w"))
-	{
-		grfMode |= STGM_WRITE;
-	}
+	grfMode |= STGM_WRITE | STGM_FAILIFTHERE;
 
 	HRESULT hr = SHCreateStreamOnFileEx(wpath,
 		grfMode,
@@ -756,10 +1128,10 @@ int CpyIMAPIObject::extract(char *filename, char *dest_system_path)
 		NULL,
 		&output_file);
 
-	printf("opened output file with result %d\n", hr);
+	//printf("opened output file with result %d\n", hr);
 	if (output_file != NULL)
 	{
-		printf("getting iso item\n");
+		//printf("getting iso item\n");
 		BSTR bpath = _com_util::ConvertStringToBSTR(filename);
 		IFsiItem *item = NULL;
 
@@ -811,3 +1183,5 @@ int CpyIMAPIObject::extract(char *filename, char *dest_system_path)
 	
 	return result;
 }
+
+*/

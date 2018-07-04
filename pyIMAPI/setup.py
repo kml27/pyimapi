@@ -73,7 +73,7 @@ setup(name=module_name,
       #adding site_path fixes local pip install ./pyIMAPI data dir but breaks distro with wheel/twine
       #just build with python setup.py sdist bdist_wheel and pip install dist\<wheel package or sdist> to test
       data_files=[("\\", ["pyIMAPI2FS-dll\\"+arch+"\\pyIMAPI2FSutil.dll"])],
-      version="0.4.0b2",
+      version="0.6.0b1",
       author="Kenneth Long",
       author_email="kennethlong@acm.org",
       url="http://bitbucket.org/ken_long/pyIMAPI2FS/",
