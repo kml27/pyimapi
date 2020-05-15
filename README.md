@@ -11,10 +11,8 @@ Create .iso images for optical discs ( data CD or Blu-ray, theoretically Red Boo
 Still early development, but core functionality works. Being alpha/beta stage, the releases still have some debug outputs sometimes. 
 
 * Latest Version (Please install this if you only plan to use this module)
+
 [v0.4.0b2 on pypi](https://pypi.org/project/pyIMAPI/)
-
-
-
 
 ### (If you plan to contribute dev time) How do I get set up? ###
 
