@@ -1,6 +1,6 @@
 # README #
 
-This is a Python module to provide a tarfile like object to create ISO 9660 and other optical disc .iso files.
+This is a Microsoft Windows only Python module to provide a tarfile like object to create ISO 9660 and other optical disc .iso files.
 
 ### What is this repository for? ###
 
