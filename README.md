@@ -8,7 +8,7 @@ This is a Python module to provide a tarfile like object to create ISO 9660 and 
 
 Create .iso images for optical discs ( data CD or Blu-ray, theoretically Red Book audio) or for mounting to VMs via python scripts. ( I initially created this to work around mounting *WAY TOO MANY* 1.44M floppy images to a DOS VM).
 
-Still early developemnt, but core functionality works. Being alpha/beta stage, the releases still have some debug outputs sometimes. 
+Still early development, but core functionality works. Being alpha/beta stage, the releases still have some debug outputs sometimes. 
 
 * Latest Version (Please install this if you only plan to use this module)
 [v0.4.0b2 on pypi](https://pypi.org/project/pyIMAPI/)
